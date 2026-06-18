@@ -1,0 +1,27 @@
+{
+  "name": "omp-exit-command",
+  "version": "0.1.0",
+  "description": "Exit Oh My Pi by typing exit.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/klondikemarlen/omp-exit-command.git"
+  },
+  "keywords": [
+    "omp",
+    "oh-my-pi",
+    "plugin",
+    "extension"
+  ],
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "omp": {
+    "extensions": [
+      "./index.js"
+    ]
+  }
+}
