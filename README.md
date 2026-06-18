@@ -5,13 +5,13 @@ Oh My Pi plugin that exits the app when you type plain `exit`.
 ## Install
 
 ```bash
-omp plugin install github:klondikemarlen/omp-exit-command
+omp install github:klondikemarlen/omp-exit-command
 ```
 
 For local development:
 
 ```bash
-omp plugin link ~/code/klondikemarlen/omp-exit-command
+omp install ~/code/klondikemarlen/omp-exit-command
 ```
 
 Restart or reload OMP after installing.
