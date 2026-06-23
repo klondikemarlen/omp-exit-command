@@ -1,6 +1,6 @@
 {
   "name": "omp-exit-command",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Exit Oh My Pi by typing exit.",
   "type": "module",
   "license": "MIT",
