@@ -4,6 +4,9 @@
   "description": "Exit Oh My Pi by typing exit.",
   "type": "module",
   "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/klondikemarlen/omp-exit-command.git"
