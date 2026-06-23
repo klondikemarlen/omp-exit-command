@@ -19,7 +19,7 @@ beforeEach(() => {
   }
 
   process.stdout.write = (chunk, ...args) => {
-    if (typeof chunk === "string" && chunk.startsWith("Resume this session with ")) {
+    if (typeof chunk === "string" && chunk.includes("Resume this session with ")) {
       stdout += chunk
       return true
     }
@@ -51,7 +51,7 @@ test("plain exit prints the same resume command as /exit", async () => {
   assert.equal(context.shutdowns, 1)
   assert.equal(
     stdout,
-    "Resume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n"
+    "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n"
   )
   assert.deepEqual(exitCodes, [0])
 })
@@ -70,7 +70,7 @@ test("session id falls back to the session file name", async () => {
 
   assert.equal(
     stdout,
-    "Resume this session with omp --resume 019ef624-20de-7000-88cc-5ab98a37cbe2\n"
+    "\nResume this session with omp --resume 019ef624-20de-7000-88cc-5ab98a37cbe2\n"
   )
 })
 

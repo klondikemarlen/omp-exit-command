@@ -60,7 +60,7 @@ function printResumeCommand(ctx) {
     ? `Resume this session with omp --resume ${sessionId}`
     : "Resume this session with omp --resume <session-id>"
 
-  process.stdout.write(`${message}\n`)
+  process.stdout.write(`\n${message}\n`)
 }
 
 function getSessionId(ctx) {
