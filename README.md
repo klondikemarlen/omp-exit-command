@@ -4,17 +4,34 @@ Oh My Pi plugin that exits the app when you type plain `exit`.
 
 ## Install
 
-```bash
-omp install github:klondikemarlen/omp-exit-command
-```
-
-For local development:
+Install the OMP plugin from GitHub:
 
 ```bash
-omp install ~/code/klondikemarlen/omp-exit-command
+omp plugin install github:klondikemarlen/omp-exit-command
 ```
 
-Restart or reload OMP after installing.
+`omp install github:klondikemarlen/omp-exit-command` also works; `omp plugin install` is clearer because this package ships an OMP runtime extension.
+
+Update an already-installed GitHub plugin with the same command:
+
+```bash
+omp plugin install github:klondikemarlen/omp-exit-command
+```
+
+Then restart OMP or run `/reload-plugins`.
+
+## Local development install
+
+For normal use, install from GitHub as shown above. For development on a local checkout, link the local package so OMP loads your working tree instead of a pinned GitHub commit:
+
+```bash
+git clone https://github.com/klondikemarlen/omp-exit-command.git
+cd omp-exit-command
+npm test
+omp plugin link "$PWD"
+```
+
+Local edits to `index.js` take effect after `/reload-plugins`.
 
 ## Behavior
 

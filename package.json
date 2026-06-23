@@ -11,6 +11,11 @@
     "type": "git",
     "url": "git+https://github.com/klondikemarlen/omp-exit-command.git"
   },
+  "homepage": "https://github.com/klondikemarlen/omp-exit-command#readme",
+  "bugs": {
+    "url": "https://github.com/klondikemarlen/omp-exit-command/issues"
+  },
+  "qna": false,
   "keywords": [
     "omp",
     "oh-my-pi",
