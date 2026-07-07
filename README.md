@@ -40,3 +40,5 @@ Local edits to `index.js` take effect after `/reload-plugins`.
 - The same resume command printed by `/exit` is written to stdout.
 - OMP shutdown is requested.
 - A next-tick process exit prevents the prompt from reaching the chat model.
+- Prompts ending in `then exit` are sent without that suffix, then the same resume/shutdown/exit flow runs from OMP's `session_stop` hook after the main-session response completes.
+- The `then exit` flow requires an OMP runtime that emits the `session_stop` extension hook.

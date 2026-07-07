@@ -1,33 +1,48 @@
 export default function exitCommandExtension(pi) {
   pi.setLabel("Exit Command")
 
-  let exitRequested = false
+  let exitAfterResponse = false
 
   pi.on("input", async (event, ctx) => {
     const input = getInputText(event)
+    const prompt = getPromptBeforeThenExit(input)
 
     if (input === "exit") {
-      exitRequested = true
       ctx.abort()
-      printResumeCommand(ctx)
-      void ctx.shutdown()
-      scheduleProcessExit()
+      finishExit(ctx)
 
-      return { action: "handled" }
+      return { handled: true }
     }
 
-    return { action: "continue" }
+    if (prompt) {
+      exitAfterResponse = true
+
+      return { text: prompt }
+    }
+
+    return
   })
 
-  pi.on("before_agent_start", async (_event, ctx) => {
-    if (!exitRequested) {
+  pi.on("session_stop", async (_event, ctx) => {
+    if (!exitAfterResponse) {
       return
     }
 
-    ctx.abort()
-    void ctx.shutdown()
-    scheduleProcessExit()
+    exitAfterResponse = false
+    finishExit(ctx)
   })
+}
+
+function finishExit(ctx) {
+  printResumeCommand(ctx)
+  void ctx.shutdown()
+  scheduleProcessExit()
+}
+
+function getPromptBeforeThenExit(input) {
+  const match = input.match(/^(.+?)\s+then\s+exit$/i)
+
+  return match?.[1].trim()
 }
 
 function getInputText(event) {
