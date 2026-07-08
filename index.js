@@ -1,3 +1,11 @@
+const EXIT_COMMAND_PATTERN = /^(?:please\s+)?exit(?:\s+after\s+this(?:\s+now)?)?[.!?]*$/i
+const PROMPT_EXIT_PATTERNS = [
+  /^(.+?)\s*(?:,|;)\s*(?:please\s+)?exit(?:\s+after\s+this(?:\s+now)?)?[.!?]*$/i,
+  /^(.+?)[.!?]\s+(?:please\s+)?exit(?:\s+after\s+this(?:\s+now)?)?[.!?]*$/i,
+  /^(.+?)\s*,?\s+(?:and\s+)?then\s+(?:please\s+)?exit[.!?]*$/i,
+  /^(.+?)\s*,?\s+and\s+(?:please\s+)?exit[.!?]*$/i,
+]
+
 export default function exitCommandExtension(pi) {
   pi.setLabel("Exit Command")
 
@@ -5,9 +13,9 @@ export default function exitCommandExtension(pi) {
 
   pi.on("input", async (event, ctx) => {
     const input = getInputText(event)
-    const prompt = getPromptBeforeThenExit(input)
+    const prompt = getPromptBeforeExitDirective(input)
 
-    if (input === "exit") {
+    if (isExitCommand(input)) {
       ctx.abort()
       finishExit(ctx)
 
@@ -39,10 +47,20 @@ function finishExit(ctx) {
   scheduleProcessExit()
 }
 
-function getPromptBeforeThenExit(input) {
-  const match = input.match(/^(.+?)\s+then\s+exit$/i)
+function isExitCommand(input) {
+  return EXIT_COMMAND_PATTERN.test(input)
+}
 
-  return match?.[1].trim()
+function getPromptBeforeExitDirective(input) {
+  for (const pattern of PROMPT_EXIT_PATTERNS) {
+    const match = input.match(pattern)
+
+    if (match?.[1]) {
+      return match[1].trim().replace(/[;,\s]+$/, "")
+    }
+  }
+
+  return undefined
 }
 
 function getInputText(event) {

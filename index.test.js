@@ -33,27 +33,33 @@ afterEach(() => {
   process.stdout.write = originalStdoutWrite
 })
 
-test("plain exit prints the same resume command as /exit", async () => {
-  const { input } = loadHandlers()
-  const context = createContext({
-    sessionManager: {
-      getSessionId() {
-        return "019ef626-a280-7000-91ea-80f4553cef59"
+test("exit commands print the same resume command as /exit", async () => {
+  for (const prompt of ["exit", "Please exit after this now?"]) {
+    stdout = ""
+    exitCodes = []
+
+    const { input } = loadHandlers()
+    const context = createContext({
+      sessionManager: {
+        getSessionId() {
+          return "019ef626-a280-7000-91ea-80f4553cef59"
+        },
       },
-    },
-  })
+    })
 
-  const result = await input("exit", context)
-  await waitForScheduledExit()
+    const result = await input(prompt, context)
+    await waitForScheduledExit()
 
-  assert.deepEqual(result, { handled: true })
-  assert.equal(context.aborted, true)
-  assert.equal(context.shutdowns, 1)
-  assert.equal(
-    stdout,
-    "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n"
-  )
-  assert.deepEqual(exitCodes, [0])
+    assert.deepEqual(result, { handled: true }, prompt)
+    assert.equal(context.aborted, true, prompt)
+    assert.equal(context.shutdowns, 1, prompt)
+    assert.equal(
+      stdout,
+      "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n",
+      prompt
+    )
+    assert.deepEqual(exitCodes, [0], prompt)
+  }
 })
 
 test("session id falls back to the session file name", async () => {
@@ -87,34 +93,47 @@ test("non-exit input continues normally", async () => {
   assert.equal(context.shutdowns, 0)
 })
 
-test("then exit runs the prompt before exiting on session stop", async () => {
-  const { input, session_stop } = loadHandlers()
-  const context = createContext({
-    sessionManager: {
-      getSessionId() {
-        return "019ef626-a280-7000-91ea-80f4553cef59"
+test("trailing exit phrases run the prompt before exiting on session stop", async () => {
+  for (const [prompt, text] of [
+    ["do X and exit", "do X"],
+    ["do X then exit!", "do X"],
+    ["do X, exit after this", "do X"],
+    ["do some thing; exit", "do some thing"],
+    ["do X. exit", "do X"],
+    ["Thanks, and exit!", "Thanks"],
+  ]) {
+    stdout = ""
+    exitCodes = []
+
+    const { input, session_stop } = loadHandlers()
+    const context = createContext({
+      sessionManager: {
+        getSessionId() {
+          return "019ef626-a280-7000-91ea-80f4553cef59"
+        },
       },
-    },
-  })
+    })
 
-  const result = await input("do some thing then exit", context)
+    const result = await input(prompt, context)
 
-  assert.deepEqual(result, { text: "do some thing" })
-  assert.equal(stdout, "")
-  assert.deepEqual(exitCodes, [])
-  assert.equal(context.aborted, false)
-  assert.equal(context.shutdowns, 0)
+    assert.deepEqual(result, { text }, prompt)
+    assert.equal(stdout, "", prompt)
+    assert.deepEqual(exitCodes, [], prompt)
+    assert.equal(context.aborted, false, prompt)
+    assert.equal(context.shutdowns, 0, prompt)
 
-  await session_stop({}, context)
-  await waitForScheduledExit()
+    await session_stop({}, context)
+    await waitForScheduledExit()
 
-  assert.equal(context.aborted, false)
-  assert.equal(context.shutdowns, 1)
-  assert.equal(
-    stdout,
-    "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n"
-  )
-  assert.deepEqual(exitCodes, [0])
+    assert.equal(context.aborted, false, prompt)
+    assert.equal(context.shutdowns, 1, prompt)
+    assert.equal(
+      stdout,
+      "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n",
+      prompt
+    )
+    assert.deepEqual(exitCodes, [0], prompt)
+  }
 })
 
 function loadHandlers() {
