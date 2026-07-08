@@ -35,10 +35,14 @@ Local edits to `index.js` take effect after `/reload-plugins`.
 
 ## Behavior
 
-- `exit` is consumed by the OMP input hook.
-- The active turn is aborted.
-- The same resume command printed by `/exit` is written to stdout.
-- OMP shutdown is requested.
-- A next-tick process exit prevents the prompt from reaching the chat model.
-- Prompts ending in `then exit` are sent without that suffix, then the same resume/shutdown/exit flow runs from OMP's `session_stop` hook after the main-session response completes.
-- The `then exit` flow requires an OMP runtime that emits the `session_stop` extension hook.
+- Immediate exit commands are consumed by the OMP input hook, abort the active turn, print the same resume command as `/exit`, request shutdown, and schedule a next-tick process exit before the prompt reaches the chat model.
+- Immediate exit examples: `exit`, `Please exit after this now?`.
+- Prompt-and-exit commands send the prompt without the exit directive, then run the same resume/shutdown/exit flow from OMP's `session_stop` hook after the main-session response completes.
+- Prompt-and-exit examples:
+  - `do X and exit` → sends `do X`
+  - `do X then exit!` → sends `do X`
+  - `do X, exit after this` → sends `do X`
+  - `do X; exit` → sends `do X`
+  - `do X. exit` → sends `do X`
+  - `Thanks, and exit!` → sends `Thanks`
+- Prompt-and-exit requires an OMP runtime that emits the `session_stop` extension hook.
