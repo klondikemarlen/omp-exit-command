@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import { afterEach, beforeEach, test } from "node:test"
 
 import exitCommandExtension from "./index.js"
+import aiExitExtension from "./ai-exit.js"
+import packageJson from "./package.json" with { type: "json" }
 
 let originalExit
 let originalStdoutWrite
@@ -93,25 +95,28 @@ test("non-exit input continues normally", async () => {
   assert.equal(context.shutdowns, 0)
 })
 
-test("AI exit tool is opt-in", () => {
-  const { flags, tools } = loadHandlers()
+test("manifest exposes AI exit detection as an optional feature extension", () => {
+  const feature = packageJson.omp.features["ai-exit-detection"]
 
-  assert.equal(flags["ai-exit-detection"].default, false)
-  assert.equal(tools.exit_after_response.defaultInactive, true)
+  assert.equal(feature.default, false)
+  assert.ok(feature.extensions.includes("./ai-exit.js"))
 })
 
-test("AI exit flag controls active tool registration on session start", async () => {
-  const off = loadHandlers()
-  await off.session_start()
-  assert.deepEqual(off.activeTools, [])
+test("base extension does not register the AI exit tool", () => {
+  const { tools } = loadHandlers()
 
-  const on = loadHandlers({ aiExitDetection: true })
-  await on.session_start()
-  assert.deepEqual(on.activeTools, ["exit_after_response"])
+  assert.equal(Object.hasOwn(tools, "exit_after_response"), false)
 })
 
-test("AI exit flag does not make input hook infer non-command exit requests", async () => {
-  const { input } = loadHandlers({ aiExitDetection: true })
+test("AI extension registers exit_after_response", () => {
+  const { tools } = loadHandlers(aiExitExtension)
+
+  assert.equal(tools.exit_after_response.name, "exit_after_response")
+  assert.equal(typeof tools.exit_after_response.execute, "function")
+})
+
+test("base input hook does not infer non-command exit requests", async () => {
+  const { input } = loadHandlers()
   const context = createContext()
 
   const result = await input("tell me how to exit vim", context)
@@ -124,7 +129,7 @@ test("AI exit flag does not make input hook infer non-command exit requests", as
 })
 
 test("AI exit tool schedules exit on session stop", async () => {
-  const { session_stop, tools } = loadHandlers({ aiExitDetection: true })
+  const { session_stop, tools } = loadHandlers(aiExitExtension)
   const context = createContext({
     sessionManager: {
       getSessionId() {
@@ -133,9 +138,12 @@ test("AI exit tool schedules exit on session stop", async () => {
     },
   })
 
-  const result = await tools.exit_after_response.execute({
-    reason: "User asked OMP to exit after the response.",
-  })
+  const result = await tools.exit_after_response.execute(
+    "tool-call-id",
+    { reason: "User asked OMP to exit after the response." },
+    undefined,
+    context
+  )
   await session_stop({}, context)
   await waitForScheduledExit()
 
@@ -155,6 +163,40 @@ test("AI exit tool schedules exit on session stop", async () => {
   )
   assert.deepEqual(exitCodes, [0])
 })
+
+test("AI exit tool ignores another session stop", async () => {
+  const { session_stop, tools } = loadHandlers(aiExitExtension)
+  const contextA = createContext({
+    sessionManager: {
+      getSessionId() {
+        return "session-a"
+      },
+    },
+  })
+  const contextB = createContext({
+    sessionManager: {
+      getSessionId() {
+        return "session-b"
+      },
+    },
+  })
+
+  await tools.exit_after_response.execute("tool-call-id", { reason: "exit after response" }, undefined, contextA)
+  await session_stop({}, contextB)
+  await waitForScheduledExit()
+
+  assert.equal(contextB.shutdowns, 0)
+  assert.equal(stdout, "")
+  assert.deepEqual(exitCodes, [])
+
+  await session_stop({}, contextA)
+  await waitForScheduledExit()
+
+  assert.equal(contextA.shutdowns, 1)
+  assert.equal(stdout, "\nResume this session with omp --resume session-a\n")
+  assert.deepEqual(exitCodes, [0])
+})
+
 
 
 test("trailing exit phrases run the prompt before exiting on session stop", async () => {
@@ -200,30 +242,49 @@ test("trailing exit phrases run the prompt before exiting on session stop", asyn
   }
 })
 
-function loadHandlers({ aiExitDetection = false, activeTools = [] } = {}) {
+test("trailing exit ignores another session stop", async () => {
+  const { input, session_stop } = loadHandlers()
+  const contextA = createContext({
+    sessionManager: {
+      getSessionId() {
+        return "session-a"
+      },
+    },
+  })
+  const contextB = createContext({
+    sessionManager: {
+      getSessionId() {
+        return "session-b"
+      },
+    },
+  })
+
+  assert.deepEqual(await input("do X and exit", contextA), { text: "do X" })
+  await session_stop({}, contextB)
+  await waitForScheduledExit()
+
+  assert.equal(contextB.shutdowns, 0)
+  assert.equal(stdout, "")
+  assert.deepEqual(exitCodes, [])
+
+  await session_stop({}, contextA)
+  await waitForScheduledExit()
+
+  assert.equal(contextA.shutdowns, 1)
+  assert.equal(stdout, "\nResume this session with omp --resume session-a\n")
+  assert.deepEqual(exitCodes, [0])
+})
+
+function loadHandlers(extension = exitCommandExtension) {
   const handlers = {}
-  const flags = {}
   const tools = {}
   const pi = {
-    activeTools: [...activeTools],
     setLabel() {},
     on(eventName, handler) {
       handlers[eventName] = handler
     },
-    registerFlag(name, options) {
-      flags[name] = options
-    },
-    getFlag(name) {
-      return name === "ai-exit-detection" ? aiExitDetection : undefined
-    },
     registerTool(tool) {
       tools[tool.name] = tool
-    },
-    getActiveTools() {
-      return this.activeTools
-    },
-    setActiveTools(nextActiveTools) {
-      this.activeTools.splice(0, this.activeTools.length, ...nextActiveTools)
     },
     zod: {
       object(shape) {
@@ -239,9 +300,9 @@ function loadHandlers({ aiExitDetection = false, activeTools = [] } = {}) {
     },
   }
 
-  exitCommandExtension(pi)
+  extension(pi)
 
-  return { ...handlers, activeTools: pi.activeTools, flags, tools }
+  return { ...handlers, tools }
 }
 
 function createContext(overrides = {}) {

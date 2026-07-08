@@ -9,14 +9,7 @@ const PROMPT_EXIT_PATTERNS = [
 export default function exitCommandExtension(pi) {
   pi.setLabel("Exit Command")
 
-  pi.registerFlag?.("ai-exit-detection", {
-    description:
-      "Enable an opt-in model-callable tool that lets the assistant schedule OMP exit after its response.",
-    type: "boolean",
-    default: false,
-  })
-
-  let exitAfterResponse = false
+  const exitAfterResponseSessions = new Set()
 
   pi.on("input", async (event, ctx) => {
     const input = getInputText(event)
@@ -30,7 +23,7 @@ export default function exitCommandExtension(pi) {
     }
 
     if (prompt) {
-      exitAfterResponse = true
+      exitAfterResponseSessions.add(getSessionKey(ctx))
 
       return { text: prompt }
     }
@@ -38,49 +31,20 @@ export default function exitCommandExtension(pi) {
     return
   })
 
-  pi.registerTool?.({
-    name: "exit_after_response",
-    label: "Exit After Response",
-    description:
-      "Opt-in exit-command helper. Call only when the user clearly wants OMP to exit after this response. Do not call for instructions about exiting other programs, such as vim, shells, games, or web pages.",
-    parameters: pi.zod.object({
-      reason: pi.zod.string().describe("Brief reason the user's message is an OMP exit request."),
-    }),
-    defaultInactive: true,
-    async execute() {
-      exitAfterResponse = true
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: "OMP will exit after this response.",
-          },
-        ],
-      }
-    },
-  })
-
-  pi.on("session_start", async () => {
-    if (!pi.getFlag?.("ai-exit-detection")) {
-      return
-    }
-
-    const activeTools = pi.getActiveTools?.()
-
-    if (activeTools && !activeTools.includes("exit_after_response")) {
-      await pi.setActiveTools?.([...activeTools, "exit_after_response"])
-    }
-  })
-
   pi.on("session_stop", async (_event, ctx) => {
-    if (!exitAfterResponse) {
+    const sessionKey = getSessionKey(ctx)
+
+    if (!exitAfterResponseSessions.has(sessionKey)) {
       return
     }
 
-    exitAfterResponse = false
+    exitAfterResponseSessions.delete(sessionKey)
     finishExit(ctx)
   })
+}
+
+function getSessionKey(ctx) {
+  return getSessionId(ctx) ?? ctx?.sessionManager ?? ctx
 }
 
 function finishExit(ctx) {

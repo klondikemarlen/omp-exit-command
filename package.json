@@ -1,6 +1,6 @@
 {
   "name": "omp-exit-command",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Exit Oh My Pi by typing exit.",
   "type": "module",
   "license": "MIT",
@@ -24,12 +24,22 @@
   ],
   "files": [
     "index.js",
+    "ai-exit.js",
     "README.md",
     "LICENSE"
   ],
   "omp": {
     "extensions": [
       "./index.js"
-    ]
+    ],
+    "features": {
+      "ai-exit-detection": {
+        "description": "Enable model-assisted exit detection with the exit_after_response tool.",
+        "default": false,
+        "extensions": [
+          "./ai-exit.js"
+        ]
+      }
+    }
   }
 }
