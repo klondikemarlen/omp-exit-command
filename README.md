@@ -63,14 +63,14 @@ omp plugin install github:klondikemarlen/omp-exit-command
 
 ## AI-assisted exit detection
 
-Deterministic grammar is the default because exit has side effects. To opt in to model-assisted detection, enable the plugin flag:
+Deterministic grammar is the default because exit has side effects. To opt in to model-assisted detection, enable the `ai-exit-detection` feature in OMP's plugin settings UI, then restart OMP or run `/reload-plugins`.
+
+The same feature can be enabled from the CLI:
 
 ```bash
-omp plugin config set omp-exit-command ai-exit-detection true
+omp plugin features omp-exit-command --enable ai-exit-detection
 ```
 
-Then restart OMP or run `/reload-plugins`.
-
-With the flag enabled, the plugin activates an `exit_after_response` tool. The assistant may call that tool when it decides the user clearly wants OMP to exit after the current response. The tool is not active by default, and deterministic `exit` / prompt-and-exit phrases still run without model interpretation.
+With the feature enabled, the plugin loads an `exit_after_response` tool. The assistant may call that tool when it decides the user clearly wants OMP to exit after the current response. The tool is not active by default, and deterministic `exit` / prompt-and-exit phrases still run without model interpretation.
 
 The tool description tells the assistant not to call it for instructions about exiting other programs, such as `tell me how to exit vim`.
