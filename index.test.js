@@ -46,7 +46,7 @@ test("plain exit prints the same resume command as /exit", async () => {
   const result = await input("exit", context)
   await waitForScheduledExit()
 
-  assert.deepEqual(result, { action: "handled" })
+  assert.deepEqual(result, { handled: true })
   assert.equal(context.aborted, true)
   assert.equal(context.shutdowns, 1)
   assert.equal(
@@ -80,11 +80,41 @@ test("non-exit input continues normally", async () => {
 
   const result = await input("help", context)
 
-  assert.deepEqual(result, { action: "continue" })
+  assert.equal(result, undefined)
   assert.equal(stdout, "")
   assert.deepEqual(exitCodes, [])
   assert.equal(context.aborted, false)
   assert.equal(context.shutdowns, 0)
+})
+
+test("then exit runs the prompt before exiting on session stop", async () => {
+  const { input, session_stop } = loadHandlers()
+  const context = createContext({
+    sessionManager: {
+      getSessionId() {
+        return "019ef626-a280-7000-91ea-80f4553cef59"
+      },
+    },
+  })
+
+  const result = await input("do some thing then exit", context)
+
+  assert.deepEqual(result, { text: "do some thing" })
+  assert.equal(stdout, "")
+  assert.deepEqual(exitCodes, [])
+  assert.equal(context.aborted, false)
+  assert.equal(context.shutdowns, 0)
+
+  await session_stop({}, context)
+  await waitForScheduledExit()
+
+  assert.equal(context.aborted, false)
+  assert.equal(context.shutdowns, 1)
+  assert.equal(
+    stdout,
+    "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n"
+  )
+  assert.deepEqual(exitCodes, [0])
 })
 
 function loadHandlers() {
