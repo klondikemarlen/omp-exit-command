@@ -46,3 +46,17 @@ Local edits to `index.js` take effect after `/reload-plugins`.
   - `do X. exit` → sends `do X`
   - `Thanks, and exit!` → sends `Thanks`
 - Prompt-and-exit requires an OMP runtime that emits the `session_stop` extension hook.
+
+## AI-assisted exit detection
+
+Deterministic grammar is the default because exit has side effects. To opt in to model-assisted detection, enable the plugin flag:
+
+```bash
+omp plugin config set omp-exit-command ai-exit-detection true
+```
+
+Then restart OMP or run `/reload-plugins`.
+
+With the flag enabled, the plugin activates an `exit_after_response` tool. The assistant may call that tool when it decides the user clearly wants OMP to exit after the current response. The tool is not active by default, and deterministic `exit` / prompt-and-exit phrases still run without model interpretation.
+
+The tool description tells the assistant not to call it for instructions about exiting other programs, such as `tell me how to exit vim`.

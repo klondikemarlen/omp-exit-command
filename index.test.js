@@ -93,6 +93,70 @@ test("non-exit input continues normally", async () => {
   assert.equal(context.shutdowns, 0)
 })
 
+test("AI exit tool is opt-in", () => {
+  const { flags, tools } = loadHandlers()
+
+  assert.equal(flags["ai-exit-detection"].default, false)
+  assert.equal(tools.exit_after_response.defaultInactive, true)
+})
+
+test("AI exit flag controls active tool registration on session start", async () => {
+  const off = loadHandlers()
+  await off.session_start()
+  assert.deepEqual(off.activeTools, [])
+
+  const on = loadHandlers({ aiExitDetection: true })
+  await on.session_start()
+  assert.deepEqual(on.activeTools, ["exit_after_response"])
+})
+
+test("AI exit flag does not make input hook infer non-command exit requests", async () => {
+  const { input } = loadHandlers({ aiExitDetection: true })
+  const context = createContext()
+
+  const result = await input("tell me how to exit vim", context)
+
+  assert.equal(result, undefined)
+  assert.equal(stdout, "")
+  assert.deepEqual(exitCodes, [])
+  assert.equal(context.aborted, false)
+  assert.equal(context.shutdowns, 0)
+})
+
+test("AI exit tool schedules exit on session stop", async () => {
+  const { session_stop, tools } = loadHandlers({ aiExitDetection: true })
+  const context = createContext({
+    sessionManager: {
+      getSessionId() {
+        return "019ef626-a280-7000-91ea-80f4553cef59"
+      },
+    },
+  })
+
+  const result = await tools.exit_after_response.execute({
+    reason: "User asked OMP to exit after the response.",
+  })
+  await session_stop({}, context)
+  await waitForScheduledExit()
+
+  assert.deepEqual(result, {
+    content: [
+      {
+        type: "text",
+        text: "OMP will exit after this response.",
+      },
+    ],
+  })
+  assert.equal(context.aborted, false)
+  assert.equal(context.shutdowns, 1)
+  assert.equal(
+    stdout,
+    "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n"
+  )
+  assert.deepEqual(exitCodes, [0])
+})
+
+
 test("trailing exit phrases run the prompt before exiting on session stop", async () => {
   for (const [prompt, text] of [
     ["do X and exit", "do X"],
@@ -136,17 +200,48 @@ test("trailing exit phrases run the prompt before exiting on session stop", asyn
   }
 })
 
-function loadHandlers() {
+function loadHandlers({ aiExitDetection = false, activeTools = [] } = {}) {
   const handlers = {}
-
-  exitCommandExtension({
+  const flags = {}
+  const tools = {}
+  const pi = {
+    activeTools: [...activeTools],
     setLabel() {},
     on(eventName, handler) {
       handlers[eventName] = handler
     },
-  })
+    registerFlag(name, options) {
+      flags[name] = options
+    },
+    getFlag(name) {
+      return name === "ai-exit-detection" ? aiExitDetection : undefined
+    },
+    registerTool(tool) {
+      tools[tool.name] = tool
+    },
+    getActiveTools() {
+      return this.activeTools
+    },
+    setActiveTools(nextActiveTools) {
+      this.activeTools.splice(0, this.activeTools.length, ...nextActiveTools)
+    },
+    zod: {
+      object(shape) {
+        return { shape }
+      },
+      string() {
+        return {
+          describe(description) {
+            return { description }
+          },
+        }
+      },
+    },
+  }
 
-  return handlers
+  exitCommandExtension(pi)
+
+  return { ...handlers, activeTools: pi.activeTools, flags, tools }
 }
 
 function createContext(overrides = {}) {
