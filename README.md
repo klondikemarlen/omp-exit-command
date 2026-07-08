@@ -33,6 +33,20 @@ omp plugin link "$PWD"
 
 Local edits to `index.js` take effect after `/reload-plugins`.
 
+## Release process
+
+1. Bump `package.json`.
+2. Run `npm test`.
+3. Merge the pull request to `main`.
+4. Install the merged remote version:
+
+```bash
+omp plugin install github:klondikemarlen/omp-exit-command
+```
+
+5. Verify `omp plugin list` shows the new `omp-exit-command` version.
+6. Restart OMP or run `/reload-plugins`.
+
 ## Behavior
 
 - Immediate exit commands are consumed by the OMP input hook, abort the active turn, print the same resume command as `/exit`, request shutdown, and schedule a next-tick process exit before the prompt reaches the chat model.
