@@ -121,10 +121,10 @@ test("non-exit input continues normally", async () => {
   }
 })
 
-test("manifest exposes AI exit detection as an optional feature extension", () => {
+test("manifest enables AI exit detection by default", () => {
   const feature = packageJson.omp.features["ai-exit-detection"]
 
-  assert.equal(feature.default, false)
+  assert.equal(feature.default, true)
   assert.ok(feature.extensions.includes("./ai-exit.js"))
 })
 
