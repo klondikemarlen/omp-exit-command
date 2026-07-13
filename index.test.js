@@ -190,6 +190,25 @@ test("AI exit tool schedules exit on session stop", async () => {
   assert.deepEqual(exitCodes, [0])
 })
 
+test("AI exit tool falls back to the next session stop without context", async () => {
+  const { session_stop, tools } = loadHandlers(aiExitExtension)
+  const context = createContext({
+    sessionManager: {
+      getSessionId() {
+        return "session-a"
+      },
+    },
+  })
+
+  await tools.exit_after_response.execute("tool-call-id", { reason: "exit after response" })
+  await session_stop({}, context)
+  await waitForScheduledExit()
+
+  assert.equal(context.shutdowns, 1)
+  assert.equal(stdout, "\nResume this session with omp --resume session-a\n")
+  assert.deepEqual(exitCodes, [0])
+})
+
 test("AI exit tool ignores another session stop", async () => {
   const { session_stop, tools } = loadHandlers(aiExitExtension)
   const contextA = createContext({
