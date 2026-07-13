@@ -1,4 +1,4 @@
-import { finishExit, getSessionKey } from "./exit-lifecycle.js"
+import { ExitLifecycle } from "./exit-lifecycle.js"
 
 const NEXT_SESSION_STOP_KEY = "__next_session_stop__"
 
@@ -16,7 +16,10 @@ export default function aiExitExtension(pi) {
       reason: pi.zod.string().describe("Brief reason the user's message is an OMP exit request."),
     }),
     async execute(...args) {
-      exitAfterResponseSessions.add(getSessionKey(args.find(isSessionContext)) ?? NEXT_SESSION_STOP_KEY)
+      const sessionContext = args.find(isSessionContext)
+      const sessionKey = ExitLifecycle.getSessionKey(sessionContext) ?? NEXT_SESSION_STOP_KEY
+
+      exitAfterResponseSessions.add(sessionKey)
       return {
         content: [
           {
@@ -29,18 +32,17 @@ export default function aiExitExtension(pi) {
   })
 
   pi.on("session_stop", async (_event, ctx) => {
-    const sessionKey = getSessionKey(ctx)
-    const fallbackKey = NEXT_SESSION_STOP_KEY
+    const sessionKey = ExitLifecycle.getSessionKey(ctx)
 
     if (exitAfterResponseSessions.has(sessionKey)) {
       exitAfterResponseSessions.delete(sessionKey)
-    } else if (exitAfterResponseSessions.has(fallbackKey)) {
-      exitAfterResponseSessions.delete(fallbackKey)
+    } else if (exitAfterResponseSessions.has(NEXT_SESSION_STOP_KEY)) {
+      exitAfterResponseSessions.delete(NEXT_SESSION_STOP_KEY)
     } else {
       return
     }
 
-    finishExit(ctx)
+    ExitLifecycle.finish(ctx)
   })
 }
 
