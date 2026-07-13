@@ -1,6 +1,6 @@
 {
   "name": "omp-exit-command",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Exit Oh My Pi with explicit commands or conversational farewells.",
   "type": "module",
   "license": "MIT",
@@ -35,7 +35,7 @@
     "features": {
       "ai-exit-detection": {
         "description": "Enable model-assisted exit detection with the exit_after_response tool.",
-        "default": false,
+        "default": true,
         "extensions": [
           "./ai-exit.js"
         ]
