@@ -35,8 +35,25 @@ afterEach(() => {
   process.stdout.write = originalStdoutWrite
 })
 
-test("exit commands print the same resume command as /exit", async () => {
-  for (const prompt of ["exit", "Please exit after this now?"]) {
+test("immediate exit commands print the same resume command as /exit", async () => {
+  for (const prompt of [
+    "exit",
+    "quit",
+    "Please exit after this now?",
+    "farewell",
+    "thank you, farewell",
+    "see you",
+    "see you later",
+    "see you soon",
+    "see you around",
+    "catch you later",
+    "talk to you later",
+    "take care",
+    "thank you take care",
+    "until next time",
+    "have a good day",
+    "have a great night",
+  ]) {
     stdout = ""
     exitCodes = []
 
@@ -83,16 +100,25 @@ test("session id falls back to the session file name", async () => {
 })
 
 test("non-exit input continues normally", async () => {
-  const { input } = loadHandlers()
-  const context = createContext()
+  for (const prompt of [
+    "help",
+    "goodbye",
+    "bye for now",
+    "thanks and bye",
+    "explain why people say farewell",
+    'write "take care" in a message',
+  ]) {
+    const { input } = loadHandlers()
+    const context = createContext()
 
-  const result = await input("help", context)
+    const result = await input(prompt, context)
 
-  assert.equal(result, undefined)
-  assert.equal(stdout, "")
-  assert.deepEqual(exitCodes, [])
-  assert.equal(context.aborted, false)
-  assert.equal(context.shutdowns, 0)
+    assert.equal(result, undefined, prompt)
+    assert.equal(stdout, "", prompt)
+    assert.deepEqual(exitCodes, [], prompt)
+    assert.equal(context.aborted, false, prompt)
+    assert.equal(context.shutdowns, 0, prompt)
+  }
 })
 
 test("manifest exposes AI exit detection as an optional feature extension", () => {
@@ -207,6 +233,10 @@ test("trailing exit phrases run the prompt before exiting on session stop", asyn
     ["do some thing; exit", "do some thing"],
     ["do X. exit", "do X"],
     ["Thanks, and exit!", "Thanks"],
+    ["do X, farewell", "do X"],
+    ["do X and take care", "do X"],
+    ["do X. see you later", "do X"],
+    ["do X, thanks and farewell", "do X"],
   ]) {
     stdout = ""
     exitCodes = []

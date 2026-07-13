@@ -1,10 +1,27 @@
-const EXIT_COMMAND_PATTERN = /^(?:please\s+)?exit(?:\s+after\s+this(?:\s+now)?)?[.!?]*$/i
-const PROMPT_EXIT_PATTERNS = [
-  /^(.+?)\s*(?:,|;)\s*(?:please\s+)?exit(?:\s+after\s+this(?:\s+now)?)?[.!?]*$/i,
-  /^(.+?)[.!?]\s+(?:please\s+)?exit(?:\s+after\s+this(?:\s+now)?)?[.!?]*$/i,
-  /^(.+?)\s*,?\s+(?:and\s+)?then\s+(?:please\s+)?exit[.!?]*$/i,
-  /^(.+?)\s*,?\s+and\s+(?:please\s+)?exit[.!?]*$/i,
+const EXIT_DIRECTIVE = "(?:please\\s+)?(?:exit(?:\\s+after\\s+this(?:\\s+now)?)?|quit)"
+const CONVERSATIONAL_EXIT_COMMANDS = [
+  "farewell",
+  "see\\s+you(?:\\s+(?:later|soon|around))?",
+  "catch\\s+you\\s+later",
+  "talk\\s+to\\s+you\\s+later",
+  "take\\s+care",
+  "until\\s+next\\s+time",
+  "have\\s+a\\s+(?:good|great)\\s+(?:day|night)",
 ]
+const CONVERSATIONAL_EXIT_DIRECTIVE =
+  `(?:(?:thanks|thank\\s+you)(?:\\s*,\\s*|\\s+and\\s+|\\s+))?(?:${CONVERSATIONAL_EXIT_COMMANDS.join("|")})`
+const EXIT_COMMAND_PATTERN = new RegExp(
+  `^(?:${EXIT_DIRECTIVE}|${CONVERSATIONAL_EXIT_DIRECTIVE})[.!?]*$`,
+  "i"
+)
+const PROMPT_EXIT_PATTERNS = [EXIT_DIRECTIVE, CONVERSATIONAL_EXIT_DIRECTIVE].flatMap(
+  (directive) => [
+    new RegExp(`^(.+?)\\s*(?:,|;)\\s*${directive}[.!?]*$`, "i"),
+    new RegExp(`^(.+?)[.!?]\\s+${directive}[.!?]*$`, "i"),
+    new RegExp(`^(.+?)\\s*,?\\s+(?:and\\s+)?then\\s+${directive}[.!?]*$`, "i"),
+    new RegExp(`^(.+?)\\s*,?\\s+and\\s+${directive}[.!?]*$`, "i"),
+  ]
+)
 
 export default function exitCommandExtension(pi) {
   pi.setLabel("Exit Command")
