@@ -1,4 +1,4 @@
-import { ExitLifecycle } from "./exit-lifecycle.js"
+import { finishExit, getSessionKey } from "./exit-lifecycle.js"
 
 const NEXT_SESSION_STOP_KEY = "__next_session_stop__"
 
@@ -17,7 +17,7 @@ export default function aiExitExtension(pi) {
     }),
     async execute(...args) {
       const sessionContext = args.find(isSessionContext)
-      const sessionKey = ExitLifecycle.getSessionKey(sessionContext) ?? NEXT_SESSION_STOP_KEY
+      const sessionKey = getSessionKey(sessionContext) ?? NEXT_SESSION_STOP_KEY
 
       exitAfterResponseSessions.add(sessionKey)
       return {
@@ -32,7 +32,7 @@ export default function aiExitExtension(pi) {
   })
 
   pi.on("session_stop", async (_event, ctx) => {
-    const sessionKey = ExitLifecycle.getSessionKey(ctx)
+    const sessionKey = getSessionKey(ctx)
 
     if (exitAfterResponseSessions.has(sessionKey)) {
       exitAfterResponseSessions.delete(sessionKey)
@@ -42,7 +42,7 @@ export default function aiExitExtension(pi) {
       return
     }
 
-    ExitLifecycle.finish(ctx)
+    finishExit(ctx)
   })
 }
 

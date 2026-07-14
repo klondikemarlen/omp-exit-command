@@ -1,6 +1,6 @@
 {
   "name": "omp-exit-command",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "Exit Oh My Pi with explicit commands or conversational farewells.",
   "type": "module",
   "license": "MIT",
