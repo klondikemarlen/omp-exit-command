@@ -3,6 +3,7 @@ import { finishExit, getSessionKey } from "./exit-lifecycle.js"
 const EXIT_DIRECTIVE = "(?:please\\s+)?(?:exit(?:\\s+after\\s+this(?:\\s+now)?)?|quit)"
 const CONVERSATIONAL_EXIT_COMMANDS = [
   "farewell",
+  "bye(?:\\s+for\\s+now)?",
   "see\\s+you(?:\\s+(?:later|soon|around))?",
   "catch\\s+you\\s+later",
   "talk\\s+to\\s+you\\s+later",

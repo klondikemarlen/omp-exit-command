@@ -42,6 +42,9 @@ test("immediate exit commands print the same resume command as /exit", async () 
     "Please exit after this now?",
     "farewell",
     "thank you, farewell",
+    "bye",
+    "bye for now",
+    "thanks, bye for now",
     "see you",
     "see you later",
     "see you soon",
@@ -103,9 +106,10 @@ test("non-exit input continues normally", async () => {
   for (const prompt of [
     "help",
     "goodbye",
-    "bye for now",
-    "thanks and bye",
+    "thanks and goodbye",
     "explain why people say farewell",
+    "explain why people say bye for now",
+    'explain “bye for now”',
     'write "take care" in a message',
   ]) {
     const { input } = loadHandlers()
