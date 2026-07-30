@@ -12,7 +12,7 @@ const CONVERSATIONAL_EXIT_COMMANDS = [
   "have\\s+a\\s+(?:good|great)\\s+(?:day|night)",
 ]
 const CONVERSATIONAL_EXIT_DIRECTIVE =
-  `(?:(?:thanks|thank\\s+you)(?:\\s*[,!?]\\s*|\\s+and\\s+|\\s+))?(?:${CONVERSATIONAL_EXIT_COMMANDS.join("|")})`
+  `(?:(?:thanks|thank\\s+you|sounds\\s+good)(?:\\s*[,!?]\\s*|\\s+and\\s+|\\s+))?(?:${CONVERSATIONAL_EXIT_COMMANDS.join("|")})`
 const EXIT_COMMAND_PATTERN = new RegExp(
   `^(?:${EXIT_DIRECTIVE}|${CONVERSATIONAL_EXIT_DIRECTIVE})[.!?]*$`,
   "i"
