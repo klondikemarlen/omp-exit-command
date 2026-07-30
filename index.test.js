@@ -43,6 +43,7 @@ test("immediate exit commands print the same resume command as /exit", async () 
     "farewell",
     "thank you, farewell",
     "bye",
+    "bye!",
     "bye for now",
     "thanks, bye for now",
     "Thanks! Bye for now.",
