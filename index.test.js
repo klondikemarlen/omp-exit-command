@@ -35,6 +35,33 @@ afterEach(() => {
   process.stdout.write = originalStdoutWrite
 })
 
+async function assertImmediateExit(prompt) {
+  stdout = ""
+  exitCodes = []
+
+  const { input } = loadHandlers()
+  const context = createContext({
+    sessionManager: {
+      getSessionId() {
+        return "019ef626-a280-7000-91ea-80f4553cef59"
+      },
+    },
+  })
+
+  const result = await input(prompt, context)
+  await waitForScheduledExit()
+
+  assert.deepEqual(result, { handled: true }, prompt)
+  assert.equal(context.aborted, true, prompt)
+  assert.equal(context.shutdowns, 1, prompt)
+  assert.equal(
+    stdout,
+    "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n",
+    prompt
+  )
+  assert.deepEqual(exitCodes, [0], prompt)
+}
+
 test("immediate exit commands print the same resume command as /exit", async () => {
   for (const prompt of [
     "exit",
@@ -46,7 +73,6 @@ test("immediate exit commands print the same resume command as /exit", async () 
     "bye for now",
     "BYE FOR NOW?",
     "thanks, bye for now",
-    "Thanks! Bye for now.",
     "sounds good! bye for now.",
     "see you",
     "see you later",
@@ -60,31 +86,12 @@ test("immediate exit commands print the same resume command as /exit", async () 
     "have a good day",
     "have a great night",
   ]) {
-    stdout = ""
-    exitCodes = []
-
-    const { input } = loadHandlers()
-    const context = createContext({
-      sessionManager: {
-        getSessionId() {
-          return "019ef626-a280-7000-91ea-80f4553cef59"
-        },
-      },
-    })
-
-    const result = await input(prompt, context)
-    await waitForScheduledExit()
-
-    assert.deepEqual(result, { handled: true }, prompt)
-    assert.equal(context.aborted, true, prompt)
-    assert.equal(context.shutdowns, 1, prompt)
-    assert.equal(
-      stdout,
-      "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n",
-      prompt
-    )
-    assert.deepEqual(exitCodes, [0], prompt)
+    await assertImmediateExit(prompt)
   }
+})
+
+test("input hook exits for the reported courteous bye-for-now request", async () => {
+  await assertImmediateExit("Thanks! Bye for now.")
 })
 
 test("session id falls back to the session file name", async () => {
