@@ -1,20 +1,5 @@
-export function finishExit(ctx) {
-  printResumeCommand(ctx)
-  void ctx.shutdown()
-  scheduleProcessExit()
-}
-
 export function getSessionKey(ctx) {
   return getSessionId(ctx) ?? ctx?.sessionManager ?? ctx
-}
-
-function printResumeCommand(ctx) {
-  const sessionId = getSessionId(ctx)
-  const message = sessionId
-    ? `Resume this session with omp --resume ${sessionId}`
-    : "Resume this session with omp --resume <session-id>"
-
-  process.stdout.write(`\n${message}\n`)
 }
 
 function getSessionId(ctx) {
@@ -57,12 +42,4 @@ function getSessionFile(sessionManager) {
   }
 
   return undefined
-}
-
-function scheduleProcessExit() {
-  const timer = setTimeout(() => {
-    process.exit(0)
-  }, 0)
-
-  timer.unref?.()
 }
