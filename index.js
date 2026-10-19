@@ -19,10 +19,10 @@ const EXIT_COMMAND_PATTERN = new RegExp(
 // Overlapping whitespace captures can block the input hook on large pasted prompts.
 const PROMPT_EXIT_PATTERNS = [EXIT_DIRECTIVE, CONVERSATIONAL_EXIT_DIRECTIVE].flatMap(
   (directive) => [
-    new RegExp(`^(.*?\\S)\\s*[,;]\\s*${directive}[.!?]*$`, "i"),
-    new RegExp(`^(.+?)[.!?]\\s+${directive}[.!?]*$`, "i"),
-    new RegExp(`^(.*?\\S)\\s+(?:and\\s+)?then\\s+${directive}[.!?]*$`, "i"),
-    new RegExp(`^(.*?\\S)\\s+and\\s+${directive}[.!?]*$`, "i"),
+    new RegExp(`^(.*?\\S)\\s*[,;]\\s*${directive}[.!?]*$`, "is"),
+    new RegExp(`^(.+?)[.!?]\\s+${directive}[.!?]*$`, "is"),
+    new RegExp(`^(.*?\\S)\\s+(?:and\\s+)?then\\s+${directive}[.!?]*$`, "is"),
+    new RegExp(`^(.*?\\S)\\s+and\\s+${directive}[.!?]*$`, "is"),
   ]
 )
 const TRAILING_PROMPT_SEPARATOR_PATTERN = /[;,\s]/

@@ -45,4 +45,6 @@ The deterministic vocabulary and public examples belong in the [README](/README.
 
 That precedence preserves prompt content. For example, `do X and thanks! bye for now.` forwards `do X and thanks`, rather than silently discarding the courtesy text before the sentence delimiter.
 
+Prompt captures span line breaks, including paragraph breaks and indented text. Use dot-all matching for those captures, not multiline anchors: the exit directive must still end the entire input, not an arbitrary line within it.
+
 Prompt captures before variable separator whitespace must end at a non-whitespace character. Otherwise lazy captures and overlapping whitespace repetitions can repeatedly repartition the same pasted text. Trim trailing prompt separators with a backward scan rather than an unanchored repeated-character regex. Preserve internal prompt whitespace, and verify changes against both positive and negative input examples; do not replace the ordered grammar with an apparently simpler suffix parser without checking its precedence.

@@ -60,6 +60,10 @@ test("non-exit input continues normally", async () => {
     "explain why people say bye for now",
     'explain “bye for now”',
     'write "take care" in a message',
+    "Explain the word exit.\nThen continue with examples.",
+    "Tell me how to\nexit vim",
+    'Write this sentence:\n"Then exit."',
+    "Summarize these notes and exit\nThen keep working.",
   ]) {
     const { input } = loadHandlers()
     const context = createContext()
@@ -149,6 +153,11 @@ test("trailing exit phrases run the prompt before exiting on session stop", asyn
     ["do X and thanks! bye for now.", "do X and thanks"],
     ["summarize a, b; then exit", "summarize a, b"],
     ["summarize  this , ; and exit", "summarize  this"],
+    ["summarize\n  these notes, exit", "summarize\n  these notes"],
+    ["summarize\n  these notes. exit", "summarize\n  these notes"],
+    ["summarize\n  these notes then exit", "summarize\n  these notes"],
+    ["summarize\n  these notes and exit", "summarize\n  these notes"],
+    ["summarize\n  these notes. see you later", "summarize\n  these notes"],
   ]) {
     const { input, session_stop } = loadHandlers()
     const context = createContext("session-a")
@@ -168,6 +177,26 @@ test("trailing exit phrases run the prompt before exiting on session stop", asyn
     assert.equal(context.aborted, false, prompt)
     assert.equal(context.shutdowns, 1, prompt)
   }
+})
+
+test("compound cleanup instructions finish before a final Then exit", async () => {
+  const { input, session_stop } = loadHandlers()
+  const context = createContext()
+  const prompt = "Clean up after youself post merge.\n\nDate mine for insights and file any relevant github issues with upstream https://github.com/klondikemarlen/marlens-skills-rules-and-tools or related projects."
+
+  const result = await input({
+    type: "input",
+    text: `${prompt}\nThen exit.`,
+    source: "interactive",
+  }, context)
+
+  assert.deepEqual(result, { text: prompt })
+  assert.equal(context.aborted, false)
+  assert.equal(context.shutdowns, 0)
+
+  await session_stop({}, context)
+
+  assert.equal(context.shutdowns, 1)
 })
 
 test("a deferred exit follows the session id rather than the manager object", async () => {

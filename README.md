@@ -54,6 +54,7 @@ See the [verification and release workflow](/docs/workflows/verification-and-rel
   - `do X, farewell` → sends `do X`
   - `do X and take care` → sends `do X`
   - `do X. see you later` → sends `do X`
+  - Multiline instructions may end with `Then exit.` on a separate line; preceding paragraphs and indentation are preserved.
 - Prompt-and-exit requires an OMP runtime that emits the `session_stop` extension hook.
 
 ## AI-assisted exit detection
