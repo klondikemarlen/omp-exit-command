@@ -8,7 +8,11 @@ async function assertImmediateExit(prompt) {
   const { input } = loadHandlers()
   const context = createContext()
 
-  const result = await input(prompt, context)
+  const result = await input({
+    type: "input",
+    text: prompt,
+    source: "interactive",
+  }, context)
 
   assert.deepEqual(result, { text: "/exit" }, prompt)
   assert.equal(context.aborted, true, prompt)
@@ -60,7 +64,11 @@ test("non-exit input continues normally", async () => {
     const { input } = loadHandlers()
     const context = createContext()
 
-    const result = await input(prompt, context)
+    const result = await input({
+      type: "input",
+      text: prompt,
+      source: "interactive",
+    }, context)
 
     assert.equal(result, undefined, prompt)
     assert.equal(context.aborted, false, prompt)
@@ -72,22 +80,25 @@ test("base input hook does not infer non-command exit requests", async () => {
   const { input } = loadHandlers()
   const context = createContext()
 
-  const result = await input("tell me how to exit vim", context)
+  const result = await input({
+    type: "input",
+    text: "tell me how to exit vim",
+    source: "interactive",
+  }, context)
 
   assert.equal(result, undefined)
   assert.equal(context.aborted, false)
   assert.equal(context.shutdowns, 0)
 })
 
-test("AI exit tool schedules exit on session stop", async () => {
+test("AI exit request shuts down only once after the response", async () => {
   const { session_stop, tools } = loadHandlers(aiExitExtension)
-  const context = createContext({
-    sessionId: "019ef626-a280-7000-91ea-80f4553cef59",
-  })
+  const context = createContext("session-a")
 
   await tools.exit_after_response.execute(
     "tool-call-id",
     { reason: "User asked OMP to exit after the response." },
+    undefined,
     undefined,
     context
   )
@@ -96,15 +107,7 @@ test("AI exit tool schedules exit on session stop", async () => {
   await session_stop({}, context)
   assert.equal(context.aborted, false)
   assert.equal(context.shutdowns, 1)
-})
 
-test("AI exit tool falls back to the next session stop without context", async () => {
-  const { session_stop, tools } = loadHandlers(aiExitExtension)
-  const context = createContext({
-    sessionId: "session-a",
-  })
-
-  await tools.exit_after_response.execute("tool-call-id", { reason: "exit after response" })
   await session_stop({}, context)
 
   assert.equal(context.shutdowns, 1)
@@ -112,15 +115,16 @@ test("AI exit tool falls back to the next session stop without context", async (
 
 test("AI exit tool ignores another session stop", async () => {
   const { session_stop, tools } = loadHandlers(aiExitExtension)
-  const contextA = createContext({
-    sessionId: "session-a",
-  })
+  const contextA = createContext("session-a")
+  const contextB = createContext("session-b")
 
-  const contextB = createContext({
-    sessionId: "session-b",
-  })
-
-  await tools.exit_after_response.execute("tool-call-id", { reason: "exit after response" }, undefined, contextA)
+  await tools.exit_after_response.execute(
+    "tool-call-id",
+    { reason: "exit after response" },
+    undefined,
+    undefined,
+    contextA
+  )
   await session_stop({}, contextB)
 
   assert.equal(contextB.shutdowns, 0)
@@ -142,13 +146,18 @@ test("trailing exit phrases run the prompt before exiting on session stop", asyn
     ["do X and take care", "do X"],
     ["do X. see you later", "do X"],
     ["do X, thanks and farewell", "do X"],
+    ["do X and thanks! bye for now.", "do X and thanks"],
+    ["summarize a, b; then exit", "summarize a, b"],
+    ["summarize  this , ; and exit", "summarize  this"],
   ]) {
     const { input, session_stop } = loadHandlers()
-    const context = createContext({
-      sessionId: "019ef626-a280-7000-91ea-80f4553cef59",
-    })
+    const context = createContext("session-a")
 
-    const result = await input(prompt, context)
+    const result = await input({
+      type: "input",
+      text: prompt,
+      source: "interactive",
+    }, context)
 
     assert.deepEqual(result, { text }, prompt)
     assert.equal(context.aborted, false, prompt)
@@ -161,27 +170,28 @@ test("trailing exit phrases run the prompt before exiting on session stop", asyn
   }
 })
 
-test("trailing exit ignores another session stop", async () => {
+test("a deferred exit follows the session id rather than the manager object", async () => {
   const { input, session_stop } = loadHandlers()
-  const contextA = createContext({
-    sessionManager: {
-      sessionFile: "/sessions/project/2026-10-19_session-a.jsonl",
-    },
-  })
-  const contextB = createContext({
-    sessionManager: {
-      sessionFile: "/sessions/project/2026-10-19_session-b.jsonl",
-    },
-  })
+  let activeSessionId = "session-a"
+  const context = createContext()
+  context.sessionManager.getSessionId = () => activeSessionId
 
-  assert.deepEqual(await input("do X and exit", contextA), { text: "do X" })
-  await session_stop({}, contextB)
+  await input({
+    type: "input",
+    text: "do X and exit",
+    source: "interactive",
+  }, context)
 
-  assert.equal(contextB.shutdowns, 0)
+  activeSessionId = "session-b"
+  await session_stop({}, context)
 
-  await session_stop({}, contextA)
+  assert.equal(context.shutdowns, 0)
 
-  assert.equal(contextA.shutdowns, 1)
+  activeSessionId = "session-a"
+  await session_stop({}, context)
+  await session_stop({}, context)
+
+  assert.equal(context.shutdowns, 1)
 })
 
 function loadHandlers(extension = exitCommandExtension) {
@@ -214,8 +224,13 @@ function loadHandlers(extension = exitCommandExtension) {
   return { ...handlers, tools }
 }
 
-function createContext(overrides = {}) {
+function createContext(sessionId = "test-session") {
   return {
+    sessionManager: {
+      getSessionId() {
+        return sessionId
+      },
+    },
     aborted: false,
     shutdowns: 0,
     abort() {
@@ -224,6 +239,5 @@ function createContext(overrides = {}) {
     shutdown() {
       this.shutdowns += 1
     },
-    ...overrides,
   }
 }

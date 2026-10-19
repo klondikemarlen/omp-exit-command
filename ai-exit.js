@@ -1,7 +1,3 @@
-import { getSessionKey } from "./exit-lifecycle.js"
-
-const NEXT_SESSION_STOP_KEY = "__next_session_stop__"
-
 export default function aiExitExtension(pi) {
   pi.setLabel("AI Exit Detection")
 
@@ -15,11 +11,9 @@ export default function aiExitExtension(pi) {
     parameters: pi.zod.object({
       reason: pi.zod.string().describe("Brief reason the user's message is an OMP exit request."),
     }),
-    async execute(...args) {
-      const sessionContext = args.find(isSessionContext)
-      const sessionKey = getSessionKey(sessionContext) ?? NEXT_SESSION_STOP_KEY
+    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+      exitAfterResponseSessions.add(ctx.sessionManager.getSessionId())
 
-      exitAfterResponseSessions.add(sessionKey)
       return {
         content: [
           {
@@ -31,21 +25,11 @@ export default function aiExitExtension(pi) {
     },
   })
 
-  pi.on("session_stop", async (_event, ctx) => {
-    const sessionKey = getSessionKey(ctx)
-
-    if (exitAfterResponseSessions.has(sessionKey)) {
-      exitAfterResponseSessions.delete(sessionKey)
-    } else if (exitAfterResponseSessions.has(NEXT_SESSION_STOP_KEY)) {
-      exitAfterResponseSessions.delete(NEXT_SESSION_STOP_KEY)
-    } else {
+  pi.on("session_stop", (_event, ctx) => {
+    if (!exitAfterResponseSessions.delete(ctx.sessionManager.getSessionId())) {
       return
     }
 
     ctx.shutdown()
   })
-}
-
-function isSessionContext(value) {
-  return Boolean(value?.sessionManager || value?.sessionId)
 }
