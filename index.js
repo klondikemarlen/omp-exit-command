@@ -1,4 +1,4 @@
-import { finishExit, getSessionKey } from "./exit-lifecycle.js"
+import { getSessionKey } from "./exit-lifecycle.js"
 
 const EXIT_DIRECTIVE = "(?:please\\s+)?(?:exit(?:\\s+after\\s+this(?:\\s+now)?)?|quit)"
 const CONVERSATIONAL_EXIT_COMMANDS = [
@@ -37,9 +37,8 @@ export default function exitCommandExtension(pi) {
 
     if (isExitCommand(input)) {
       ctx.abort()
-      finishExit(ctx)
 
-      return { handled: true }
+      return { text: "/exit" }
     }
 
     if (prompt) {
@@ -59,10 +58,9 @@ export default function exitCommandExtension(pi) {
     }
 
     exitAfterResponseSessions.delete(sessionKey)
-    finishExit(ctx)
+    ctx.shutdown()
   })
 }
-
 
 function isExitCommand(input) {
   return EXIT_COMMAND_PATTERN.test(input)

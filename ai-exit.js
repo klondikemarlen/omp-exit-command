@@ -1,4 +1,4 @@
-import { finishExit, getSessionKey } from "./exit-lifecycle.js"
+import { getSessionKey } from "./exit-lifecycle.js"
 
 const NEXT_SESSION_STOP_KEY = "__next_session_stop__"
 
@@ -42,7 +42,7 @@ export default function aiExitExtension(pi) {
       return
     }
 
-    finishExit(ctx)
+    ctx.shutdown()
   })
 }
 

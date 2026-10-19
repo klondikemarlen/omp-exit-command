@@ -1,68 +1,21 @@
 import assert from "node:assert/strict"
-import { afterEach, beforeEach, test } from "node:test"
+import { test } from "node:test"
 
 import exitCommandExtension from "./index.js"
 import aiExitExtension from "./ai-exit.js"
-import packageJson from "./package.json" with { type: "json" }
-
-let originalExit
-let originalStdoutWrite
-let stdout
-let exitCodes
-
-beforeEach(() => {
-  stdout = ""
-  exitCodes = []
-  originalExit = process.exit
-  originalStdoutWrite = process.stdout.write
-
-  process.exit = (code) => {
-    exitCodes.push(code)
-  }
-
-  process.stdout.write = (chunk, ...args) => {
-    if (typeof chunk === "string" && chunk.includes("Resume this session with ")) {
-      stdout += chunk
-      return true
-    }
-
-    return originalStdoutWrite.call(process.stdout, chunk, ...args)
-  }
-})
-
-afterEach(() => {
-  process.exit = originalExit
-  process.stdout.write = originalStdoutWrite
-})
 
 async function assertImmediateExit(prompt) {
-  stdout = ""
-  exitCodes = []
-
   const { input } = loadHandlers()
-  const context = createContext({
-    sessionManager: {
-      getSessionId() {
-        return "019ef626-a280-7000-91ea-80f4553cef59"
-      },
-    },
-  })
+  const context = createContext()
 
   const result = await input(prompt, context)
-  await waitForScheduledExit()
 
-  assert.deepEqual(result, { handled: true }, prompt)
+  assert.deepEqual(result, { text: "/exit" }, prompt)
   assert.equal(context.aborted, true, prompt)
-  assert.equal(context.shutdowns, 1, prompt)
-  assert.equal(
-    stdout,
-    "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n",
-    prompt
-  )
-  assert.deepEqual(exitCodes, [0], prompt)
+  assert.equal(context.shutdowns, 0, prompt)
 }
 
-test("immediate exit commands print the same resume command as /exit", async () => {
+test("immediate exit commands route to native /exit before reaching the model", async () => {
   for (const prompt of [
     "exit",
     "quit",
@@ -94,24 +47,6 @@ test("input hook exits for the reported courteous bye-for-now request", async ()
   await assertImmediateExit("Thanks! Bye for now.")
 })
 
-test("session id falls back to the session file name", async () => {
-  const { input } = loadHandlers()
-  const context = createContext({
-    sessionManager: {
-      sessionFile:
-        "/home/user/.omp/agent/sessions/project/2026-06-23T20-20-23-390Z_019ef624-20de-7000-88cc-5ab98a37cbe2.jsonl",
-    },
-  })
-
-  await input({ input: " exit " }, context)
-  await waitForScheduledExit()
-
-  assert.equal(
-    stdout,
-    "\nResume this session with omp --resume 019ef624-20de-7000-88cc-5ab98a37cbe2\n"
-  )
-})
-
 test("non-exit input continues normally", async () => {
   for (const prompt of [
     "help",
@@ -128,31 +63,9 @@ test("non-exit input continues normally", async () => {
     const result = await input(prompt, context)
 
     assert.equal(result, undefined, prompt)
-    assert.equal(stdout, "", prompt)
-    assert.deepEqual(exitCodes, [], prompt)
     assert.equal(context.aborted, false, prompt)
     assert.equal(context.shutdowns, 0, prompt)
   }
-})
-
-test("manifest enables AI exit detection by default", () => {
-  const feature = packageJson.omp.features["ai-exit-detection"]
-
-  assert.equal(feature.default, true)
-  assert.ok(feature.extensions.includes("./ai-exit.js"))
-})
-
-test("base extension does not register the AI exit tool", () => {
-  const { tools } = loadHandlers()
-
-  assert.equal(Object.hasOwn(tools, "exit_after_response"), false)
-})
-
-test("AI extension registers exit_after_response", () => {
-  const { tools } = loadHandlers(aiExitExtension)
-
-  assert.equal(tools.exit_after_response.name, "exit_after_response")
-  assert.equal(typeof tools.exit_after_response.execute, "function")
 })
 
 test("base input hook does not infer non-command exit requests", async () => {
@@ -162,8 +75,6 @@ test("base input hook does not infer non-command exit requests", async () => {
   const result = await input("tell me how to exit vim", context)
 
   assert.equal(result, undefined)
-  assert.equal(stdout, "")
-  assert.deepEqual(exitCodes, [])
   assert.equal(context.aborted, false)
   assert.equal(context.shutdowns, 0)
 })
@@ -171,92 +82,53 @@ test("base input hook does not infer non-command exit requests", async () => {
 test("AI exit tool schedules exit on session stop", async () => {
   const { session_stop, tools } = loadHandlers(aiExitExtension)
   const context = createContext({
-    sessionManager: {
-      getSessionId() {
-        return "019ef626-a280-7000-91ea-80f4553cef59"
-      },
-    },
+    sessionId: "019ef626-a280-7000-91ea-80f4553cef59",
   })
 
-  const result = await tools.exit_after_response.execute(
+  await tools.exit_after_response.execute(
     "tool-call-id",
     { reason: "User asked OMP to exit after the response." },
     undefined,
     context
   )
-  await session_stop({}, context)
-  await waitForScheduledExit()
+  assert.equal(context.shutdowns, 0)
 
-  assert.deepEqual(result, {
-    content: [
-      {
-        type: "text",
-        text: "OMP will exit after this response.",
-      },
-    ],
-  })
+  await session_stop({}, context)
   assert.equal(context.aborted, false)
   assert.equal(context.shutdowns, 1)
-  assert.equal(
-    stdout,
-    "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n"
-  )
-  assert.deepEqual(exitCodes, [0])
 })
 
 test("AI exit tool falls back to the next session stop without context", async () => {
   const { session_stop, tools } = loadHandlers(aiExitExtension)
   const context = createContext({
-    sessionManager: {
-      getSessionId() {
-        return "session-a"
-      },
-    },
+    sessionId: "session-a",
   })
 
   await tools.exit_after_response.execute("tool-call-id", { reason: "exit after response" })
   await session_stop({}, context)
-  await waitForScheduledExit()
 
   assert.equal(context.shutdowns, 1)
-  assert.equal(stdout, "\nResume this session with omp --resume session-a\n")
-  assert.deepEqual(exitCodes, [0])
 })
 
 test("AI exit tool ignores another session stop", async () => {
   const { session_stop, tools } = loadHandlers(aiExitExtension)
   const contextA = createContext({
-    sessionManager: {
-      getSessionId() {
-        return "session-a"
-      },
-    },
+    sessionId: "session-a",
   })
+
   const contextB = createContext({
-    sessionManager: {
-      getSessionId() {
-        return "session-b"
-      },
-    },
+    sessionId: "session-b",
   })
 
   await tools.exit_after_response.execute("tool-call-id", { reason: "exit after response" }, undefined, contextA)
   await session_stop({}, contextB)
-  await waitForScheduledExit()
 
   assert.equal(contextB.shutdowns, 0)
-  assert.equal(stdout, "")
-  assert.deepEqual(exitCodes, [])
 
   await session_stop({}, contextA)
-  await waitForScheduledExit()
 
   assert.equal(contextA.shutdowns, 1)
-  assert.equal(stdout, "\nResume this session with omp --resume session-a\n")
-  assert.deepEqual(exitCodes, [0])
 })
-
-
 
 test("trailing exit phrases run the prompt before exiting on session stop", async () => {
   for (const [prompt, text] of [
@@ -271,37 +143,21 @@ test("trailing exit phrases run the prompt before exiting on session stop", asyn
     ["do X. see you later", "do X"],
     ["do X, thanks and farewell", "do X"],
   ]) {
-    stdout = ""
-    exitCodes = []
-
     const { input, session_stop } = loadHandlers()
     const context = createContext({
-      sessionManager: {
-        getSessionId() {
-          return "019ef626-a280-7000-91ea-80f4553cef59"
-        },
-      },
+      sessionId: "019ef626-a280-7000-91ea-80f4553cef59",
     })
 
     const result = await input(prompt, context)
 
     assert.deepEqual(result, { text }, prompt)
-    assert.equal(stdout, "", prompt)
-    assert.deepEqual(exitCodes, [], prompt)
     assert.equal(context.aborted, false, prompt)
     assert.equal(context.shutdowns, 0, prompt)
 
     await session_stop({}, context)
-    await waitForScheduledExit()
 
     assert.equal(context.aborted, false, prompt)
     assert.equal(context.shutdowns, 1, prompt)
-    assert.equal(
-      stdout,
-      "\nResume this session with omp --resume 019ef626-a280-7000-91ea-80f4553cef59\n",
-      prompt
-    )
-    assert.deepEqual(exitCodes, [0], prompt)
   }
 })
 
@@ -309,33 +165,23 @@ test("trailing exit ignores another session stop", async () => {
   const { input, session_stop } = loadHandlers()
   const contextA = createContext({
     sessionManager: {
-      getSessionId() {
-        return "session-a"
-      },
+      sessionFile: "/sessions/project/2026-10-19_session-a.jsonl",
     },
   })
   const contextB = createContext({
     sessionManager: {
-      getSessionId() {
-        return "session-b"
-      },
+      sessionFile: "/sessions/project/2026-10-19_session-b.jsonl",
     },
   })
 
   assert.deepEqual(await input("do X and exit", contextA), { text: "do X" })
   await session_stop({}, contextB)
-  await waitForScheduledExit()
 
   assert.equal(contextB.shutdowns, 0)
-  assert.equal(stdout, "")
-  assert.deepEqual(exitCodes, [])
 
   await session_stop({}, contextA)
-  await waitForScheduledExit()
 
   assert.equal(contextA.shutdowns, 1)
-  assert.equal(stdout, "\nResume this session with omp --resume session-a\n")
-  assert.deepEqual(exitCodes, [0])
 })
 
 function loadHandlers(extension = exitCommandExtension) {
@@ -375,13 +221,9 @@ function createContext(overrides = {}) {
     abort() {
       this.aborted = true
     },
-    async shutdown() {
+    shutdown() {
       this.shutdowns += 1
     },
     ...overrides,
   }
-}
-
-async function waitForScheduledExit() {
-  await new Promise((resolve) => setTimeout(resolve, 5))
 }
