@@ -49,11 +49,11 @@ omp plugin install github:klondikemarlen/omp-exit-command
 
 ## Behavior
 
-- Immediate exit commands are consumed by the OMP input hook, abort the active turn, print the same resume command as `/exit`, request shutdown, and schedule a next-tick process exit before the prompt reaches the chat model.
+- Immediate exit commands are intercepted by the OMP input hook, abort the active turn, and route to native `/exit` before reaching the chat model. OMP completes its normal teardown and prints its session information, including the resume hint for persisted sessions; the plugin does not print a separate hint or force the process to exit.
 - Immediate exit examples: `exit`, `quit`, `Please exit after this now?`.
 - Conversational farewells also exit immediately: `farewell`, `bye` / `bye for now`, `see you` (including `see you later`, `soon`, or `around`), `catch you later`, `talk to you later`, `take care`, `until next time`, and `have a good day` / `have a great night`. They may be prefixed with `thanks`, `thank you`, or `sounds good`.
 - Farewells are anchored commands: requests that mention or quote one, such as `explain why people say farewell`, continue normally.
-- Prompt-and-exit commands send the prompt without the exit directive, then run the same resume/shutdown/exit flow from OMP's `session_stop` hook after the main-session response completes.
+- Prompt-and-exit commands send the prompt without the exit directive, then request native graceful shutdown from OMP's `session_stop` hook after the main-session response completes, preserving the same teardown and session output.
 - Prompt-and-exit examples:
   - `do X and exit` → sends `do X`
   - `do X then exit!` → sends `do X`
