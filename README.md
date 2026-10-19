@@ -35,17 +35,7 @@ Local edits to `index.js` take effect after `/reload-plugins`.
 
 ## Release process
 
-1. Bump `package.json`.
-2. Run `npm test`.
-3. Merge the pull request to `main`.
-4. Install the merged remote version:
-
-```bash
-omp plugin install github:klondikemarlen/omp-exit-command
-```
-
-5. Verify `omp plugin list` shows the new `omp-exit-command` version.
-6. Restart OMP or run `/reload-plugins`.
+See the [verification and release workflow](/docs/workflows/verification-and-release.md) for the test gate, native-exit parity checks, and fresh-process verification of the released GitHub artifact.
 
 ## Behavior
 
@@ -81,3 +71,7 @@ Replace `--disable` with `--enable` to restore model-assisted detection.
 When enabled, the plugin loads an `exit_after_response` tool. The assistant may call that tool when it decides the user clearly wants OMP to exit after the current response. Explicit `exit` / `quit` and the deterministic prompt-and-exit grammar remain active during this rollout.
 
 The tool description tells the assistant not to call it for instructions about exiting other programs, such as `tell me how to exit vim`.
+
+## Maintainer knowledge base
+
+The [maintainer guide](/docs/README.md) covers runtime contracts, parsing and shutdown invariants, the JavaScript decision, and reproducible QA.
