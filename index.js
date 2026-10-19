@@ -1,5 +1,3 @@
-import { getSessionKey } from "./exit-lifecycle.js"
-
 const EXIT_DIRECTIVE = "(?:please\\s+)?(?:exit(?:\\s+after\\s+this(?:\\s+now)?)?|quit)"
 const CONVERSATIONAL_EXIT_COMMANDS = [
   "farewell",
@@ -17,23 +15,25 @@ const EXIT_COMMAND_PATTERN = new RegExp(
   `^(?:${EXIT_DIRECTIVE}|${CONVERSATIONAL_EXIT_DIRECTIVE})[.!?]*$`,
   "i"
 )
+// Keep separator whitespace outside a prompt capture ending in a non-whitespace character.
+// Overlapping whitespace captures can block the input hook on large pasted prompts.
 const PROMPT_EXIT_PATTERNS = [EXIT_DIRECTIVE, CONVERSATIONAL_EXIT_DIRECTIVE].flatMap(
   (directive) => [
-    new RegExp(`^(.+?)\\s*(?:,|;)\\s*${directive}[.!?]*$`, "i"),
+    new RegExp(`^(.*?\\S)\\s*[,;]\\s*${directive}[.!?]*$`, "i"),
     new RegExp(`^(.+?)[.!?]\\s+${directive}[.!?]*$`, "i"),
-    new RegExp(`^(.+?)\\s*,?\\s+(?:and\\s+)?then\\s+${directive}[.!?]*$`, "i"),
-    new RegExp(`^(.+?)\\s*,?\\s+and\\s+${directive}[.!?]*$`, "i"),
+    new RegExp(`^(.*?\\S)\\s+(?:and\\s+)?then\\s+${directive}[.!?]*$`, "i"),
+    new RegExp(`^(.*?\\S)\\s+and\\s+${directive}[.!?]*$`, "i"),
   ]
 )
+const TRAILING_PROMPT_SEPARATOR_PATTERN = /[;,\s]/
 
 export default function exitCommandExtension(pi) {
   pi.setLabel("Exit Command")
 
   const exitAfterResponseSessions = new Set()
 
-  pi.on("input", async (event, ctx) => {
-    const input = getInputText(event)
-    const prompt = getPromptBeforeExitDirective(input)
+  pi.on("input", (event, ctx) => {
+    const input = event.text.trim()
 
     if (isExitCommand(input)) {
       ctx.abort()
@@ -41,8 +41,10 @@ export default function exitCommandExtension(pi) {
       return { text: "/exit" }
     }
 
+    const prompt = getPromptBeforeExitDirective(input)
+
     if (prompt) {
-      exitAfterResponseSessions.add(getSessionKey(ctx))
+      exitAfterResponseSessions.add(ctx.sessionManager.getSessionId())
 
       return { text: prompt }
     }
@@ -50,14 +52,11 @@ export default function exitCommandExtension(pi) {
     return
   })
 
-  pi.on("session_stop", async (_event, ctx) => {
-    const sessionKey = getSessionKey(ctx)
-
-    if (!exitAfterResponseSessions.has(sessionKey)) {
+  pi.on("session_stop", (_event, ctx) => {
+    if (!exitAfterResponseSessions.delete(ctx.sessionManager.getSessionId())) {
       return
     }
 
-    exitAfterResponseSessions.delete(sessionKey)
     ctx.shutdown()
   })
 }
@@ -70,34 +69,17 @@ function getPromptBeforeExitDirective(input) {
   for (const pattern of PROMPT_EXIT_PATTERNS) {
     const match = input.match(pattern)
 
-    if (match?.[1]) {
-      return match[1].trim().replace(/[;,\s]+$/, "")
+    if (!match) continue
+
+    const prompt = match[1]
+    let end = prompt.length
+
+    while (end > 0 && TRAILING_PROMPT_SEPARATOR_PATTERN.test(prompt[end - 1])) {
+      end -= 1
     }
+
+    return prompt.slice(0, end).trimStart()
   }
 
   return undefined
-}
-
-function getInputText(event) {
-  if (typeof event === "string") {
-    return event.trim()
-  }
-
-  if (typeof event?.input === "string") {
-    return event.input.trim()
-  }
-
-  if (typeof event?.text === "string") {
-    return event.text.trim()
-  }
-
-  if (typeof event?.content === "string") {
-    return event.content.trim()
-  }
-
-  if (typeof event?.message === "string") {
-    return event.message.trim()
-  }
-
-  return ""
 }
