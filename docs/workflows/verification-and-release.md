@@ -65,6 +65,7 @@ omp --resume SESSION_ID --no-extensions -e ./index.js -e ./ai-exit.js --no-title
 | Native baseline | In the first command, type `/exit` | OMP completes teardown and shows the saved-session resume information. |
 | Immediate | In the extension command, type `Thanks! Bye for now.` | No model prompt; native teardown and the same session information exactly once. |
 | Deferred | Type `Reply with exactly EXIT_OK and exit` | The prompt reaches the model without the directive; the reply finishes before native shutdown. |
+| Multiline deferred | Paste `Reply with exactly EXIT_OK.`, a blank line, `Do not change files.`, then `Then exit.` on its own line | Paragraphs reach the model unchanged without the final directive; the reply finishes before native shutdown. |
 | AI-assisted | Ask the assistant to call `exit_after_response` and then reply | The tool schedules shutdown for its own session; the final reply finishes before exit. |
 | Unsaved session | Start with an empty temporary session directory, then type `exit` | Match native `/exit` for that same setup; do not fabricate a resume hint. |
 | Autocomplete | Type `/exi`, press Tab, then Enter | Native `/exit` is offered, completed, and executed. |
