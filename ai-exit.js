@@ -30,6 +30,10 @@ export default function aiExitExtension(pi) {
       return
     }
 
+    pi.events.emit("omp-exit-command:exit-requested", {
+      sessionId: ctx.sessionManager.getSessionId(),
+    })
+
     ctx.shutdown()
   })
 }

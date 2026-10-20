@@ -69,6 +69,8 @@ omp --resume SESSION_ID --no-extensions -e ./index.js -e ./ai-exit.js --no-title
 | AI-assisted | Ask the assistant to call `exit_after_response` and then reply | The tool schedules shutdown for its own session; the final reply finishes before exit. |
 | Unsaved session | Start with an empty temporary session directory, then type `exit` | Match native `/exit` for that same setup; do not fabricate a resume hint. |
 | Autocomplete | Type `/exi`, press Tab, then Enter | Native `/exit` is offered, completed, and executed. |
+| Queued `ompi` restart | In a disposable wrapped session, accept a targeted restart while a prompt-and-exit turn is active | The reply finishes, native teardown and session information complete, and the wrapper exits without relaunching. |
+| Ordinary `ompi` restart | Request a targeted restart without exit intent | The wrapper relaunches once into the same persisted session; explicit-exit coordination must not suppress ordinary restart. |
 
 An additional temporary extension can await a short asynchronous operation in `session_shutdown` and write a unique completion marker. Confirm the marker appears before the final native session information, then remove the probe. Do not weaken teardown or change model/provider routes to make QA pass. A live model/advisor failure is an external limitation to report, not proof of a plugin regression or permission to change defaults.
 
