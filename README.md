@@ -44,6 +44,7 @@ See the [verification and release workflow](/docs/workflows/verification-and-rel
 - Conversational farewells also exit immediately: `farewell`, `bye` / `bye for now`, `see you` (including `see you later`, `soon`, or `around`), `catch you later`, `talk to you later`, `take care`, `until next time`, and `have a good day` / `have a great night`. They may be prefixed with `thanks`, `thank you`, or `sounds good`.
 - Farewells are anchored commands: requests that mention or quote one, such as `explain why people say farewell`, continue normally.
 - Prompt-and-exit commands send the prompt without the exit directive, then request native graceful shutdown from OMP's `session_stop` hook after the main-session response completes, preserving the same teardown and session output.
+- With an `ompi` wrapper supporting explicit-exit intent, immediate, prompt-and-exit, and AI-assisted exits override a queued restart instead of reopening the session. Update both packages and start a new process; older wrappers still let a pending restart consume a graceful exit.
 - Prompt-and-exit examples:
   - `do X and exit` → sends `do X`
   - `do X then exit!` → sends `do X`
