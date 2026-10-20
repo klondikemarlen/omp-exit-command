@@ -45,10 +45,8 @@ Before handing an immediate exit to native `/exit`, or calling `ctx.shutdown()` 
 
 ## Parsing invariants
 
-The deterministic vocabulary and public examples belong in the [README](/README.md#behavior). Classification checks standalone commands first. For prompt-and-exit, explicit directives precede conversational farewells; within each group the existing order is comma/semicolon, sentence punctuation, `then`/`and then`, then `and`.
+The deterministic vocabulary and public examples belong in the [README](/README.md#behavior). Classification checks standalone commands first. Prompt-and-exit classification only arms the active session ID; the input hook returns no replacement, so OMP forwards the original input with its exit directive and all whitespace intact.
 
-That precedence preserves prompt content. For example, `do X and thanks! bye for now.` forwards `do X and thanks`, rather than silently discarding the courtesy text before the sentence delimiter.
+Prompt patterns span line breaks, including paragraph breaks and indented text. Use dot-all matching, not multiline anchors: the exit directive must still end the entire input, not an arbitrary line within it.
 
-Prompt captures span line breaks, including paragraph breaks and indented text. Use dot-all matching for those captures, not multiline anchors: the exit directive must still end the entire input, not an arbitrary line within it.
-
-Prompt captures before variable separator whitespace must end at a non-whitespace character. Otherwise lazy captures and overlapping whitespace repetitions can repeatedly repartition the same pasted text. Trim trailing prompt separators with a backward scan rather than an unanchored repeated-character regex. Preserve internal prompt whitespace, and verify changes against both positive and negative input examples; do not replace the ordered grammar with an apparently simpler suffix parser without checking its precedence.
+Prompt matches before variable separator whitespace must end at a non-whitespace character. Otherwise lazy matches and overlapping whitespace repetitions can repeatedly repartition large pasted text. Keep positive and negative grammar coverage and the bounded large-input smoke when changing these patterns.
