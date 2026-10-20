@@ -25,7 +25,6 @@ const PROMPT_EXIT_PATTERNS = [EXIT_DIRECTIVE, CONVERSATIONAL_EXIT_DIRECTIVE].fla
     new RegExp(`^(.*?\\S)\\s+and\\s+${directive}[.!?]*$`, "is"),
   ]
 )
-const TRAILING_PROMPT_SEPARATOR_PATTERN = /[;,\s]/
 
 export default function exitCommandExtension(pi) {
   pi.setLabel("Exit Command")
@@ -45,15 +44,9 @@ export default function exitCommandExtension(pi) {
       return { text: "/exit" }
     }
 
-    const prompt = getPromptBeforeExitDirective(input)
-
-    if (prompt) {
+    if (hasTrailingExitDirective(input)) {
       exitAfterResponseSessions.add(ctx.sessionManager.getSessionId())
-
-      return { text: prompt }
     }
-
-    return
   })
 
   pi.on("session_stop", (_event, ctx) => {
@@ -73,21 +66,6 @@ function isExitCommand(input) {
   return EXIT_COMMAND_PATTERN.test(input)
 }
 
-function getPromptBeforeExitDirective(input) {
-  for (const pattern of PROMPT_EXIT_PATTERNS) {
-    const match = input.match(pattern)
-
-    if (!match) continue
-
-    const prompt = match[1]
-    let end = prompt.length
-
-    while (end > 0 && TRAILING_PROMPT_SEPARATOR_PATTERN.test(prompt[end - 1])) {
-      end -= 1
-    }
-
-    return prompt.slice(0, end).trimStart()
-  }
-
-  return undefined
+function hasTrailingExitDirective(input) {
+  return PROMPT_EXIT_PATTERNS.some((pattern) => pattern.test(input))
 }

@@ -177,25 +177,25 @@ test("when another session stops, the AI exit request remains pending", async ()
 
 test("when a prompt ends with an exit phrase, it runs before shutdown", async () => {
   // Arrange
-  for (const [prompt, text] of [
-    ["do X and exit", "do X"],
-    ["do X then exit!", "do X"],
-    ["do X, exit after this", "do X"],
-    ["do some thing; exit", "do some thing"],
-    ["do X. exit", "do X"],
-    ["Thanks, and exit!", "Thanks"],
-    ["do X, farewell", "do X"],
-    ["do X and take care", "do X"],
-    ["do X. see you later", "do X"],
-    ["do X, thanks and farewell", "do X"],
-    ["do X and thanks! bye for now.", "do X and thanks"],
-    ["summarize a, b; then exit", "summarize a, b"],
-    ["summarize  this , ; and exit", "summarize  this"],
-    ["summarize\n  these notes, exit", "summarize\n  these notes"],
-    ["summarize\n  these notes. exit", "summarize\n  these notes"],
-    ["summarize\n  these notes then exit", "summarize\n  these notes"],
-    ["summarize\n  these notes and exit", "summarize\n  these notes"],
-    ["summarize\n  these notes. see you later", "summarize\n  these notes"],
+  for (const prompt of [
+    "do X and exit",
+    "do X then exit!",
+    "do X, exit after this",
+    "do some thing; exit",
+    "do X. exit",
+    "Thanks, and exit!",
+    "do X, farewell",
+    "do X and take care",
+    "do X. see you later",
+    "do X, thanks and farewell",
+    "do X and thanks! bye for now.",
+    "summarize a, b; then exit",
+    "summarize  this , ; and exit",
+    "summarize\n  these notes, exit",
+    "summarize\n  these notes. exit",
+    "summarize\n  these notes then exit",
+    "summarize\n  these notes and exit",
+    "summarize\n  these notes. see you later",
   ]) {
     const { input, session_stop } = loadHandlers()
     const context = createContext("session-a")
@@ -208,7 +208,7 @@ test("when a prompt ends with an exit phrase, it runs before shutdown", async ()
     }, context)
 
     // Assert
-    assert.deepEqual(result, { text }, prompt)
+    assert.equal(result, undefined, prompt)
     assert.equal(context.aborted, false, prompt)
     assert.equal(context.shutdowns, 0, prompt)
 
@@ -235,7 +235,7 @@ test("when compound cleanup instructions end with Then exit, they finish before 
   }, context)
 
   // Assert
-  assert.deepEqual(result, { text: prompt })
+  assert.equal(result, undefined)
   assert.equal(context.aborted, false)
   assert.equal(context.shutdowns, 0)
 
