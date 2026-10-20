@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { EventEmitter } from "node:events"
 import { test } from "node:test"
 
 import exitCommandExtension from "./index.js"
@@ -278,6 +279,7 @@ function loadHandlers(extension = exitCommandExtension) {
   const handlers = {}
   const tools = {}
   const pi = {
+    events: new EventEmitter(),
     setLabel() {},
     on(eventName, handler) {
       handlers[eventName] = handler

@@ -36,6 +36,10 @@ export default function exitCommandExtension(pi) {
     const input = event.text.trim()
 
     if (isExitCommand(input)) {
+      pi.events.emit("omp-exit-command:exit-requested", {
+        sessionId: ctx.sessionManager.getSessionId(),
+      })
+
       ctx.abort()
 
       return { text: "/exit" }
@@ -56,6 +60,10 @@ export default function exitCommandExtension(pi) {
     if (!exitAfterResponseSessions.delete(ctx.sessionManager.getSessionId())) {
       return
     }
+
+    pi.events.emit("omp-exit-command:exit-requested", {
+      sessionId: ctx.sessionManager.getSessionId(),
+    })
 
     ctx.shutdown()
   })
