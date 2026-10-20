@@ -18,7 +18,7 @@ Update an already-installed GitHub plugin with the same command:
 omp plugin install github:klondikemarlen/omp-exit-command
 ```
 
-Then restart OMP or run `/reload-plugins`.
+Then start a new OMP process. `/reload-plugins` may retain modules already loaded by the current process.
 
 ## Local development install
 
@@ -31,7 +31,7 @@ npm test
 omp plugin link "$PWD"
 ```
 
-Local edits to `index.js` take effect after `/reload-plugins`.
+Start a new OMP process to exercise edits to `index.js`; `/reload-plugins` is not a fresh-process verification.
 
 ## Release process
 
