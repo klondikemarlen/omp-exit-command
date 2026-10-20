@@ -43,19 +43,19 @@ See the [verification and release workflow](/docs/workflows/verification-and-rel
 - Immediate exit examples: `exit`, `quit`, `Please exit after this now?`.
 - Conversational farewells also exit immediately: `farewell`, `bye` / `bye for now`, `see you` (including `see you later`, `soon`, or `around`), `catch you later`, `talk to you later`, `take care`, `until next time`, and `have a good day` / `have a great night`. They may be prefixed with `thanks`, `thank you`, or `sounds good`.
 - Farewells are anchored commands: requests that mention or quote one, such as `explain why people say farewell`, continue normally.
-- Prompt-and-exit commands send the prompt without the exit directive, then request native graceful shutdown from OMP's `session_stop` hook after the main-session response completes, preserving the same teardown and session output.
+- Prompt-and-exit commands leave the entire original input visible to the model, including the exit directive, paragraphs, and whitespace. The plugin also schedules native graceful shutdown from OMP's `session_stop` hook after the main-session response completes, preserving normal teardown and session output.
 - With `ompi` 0.9.2 or newer, immediate, prompt-and-exit, and AI-assisted exits override a queued restart instead of reopening the session. Update both packages and start a new process; older wrappers and already-running pre-update processes still let a pending restart consume a graceful exit.
 - Prompt-and-exit examples:
-  - `do X and exit` → sends `do X`
-  - `do X then exit!` → sends `do X`
-  - `do X, exit after this` → sends `do X`
-  - `do X; exit` → sends `do X`
-  - `do X. exit` → sends `do X`
-  - `Thanks, and exit!` → sends `Thanks`
-  - `do X, farewell` → sends `do X`
-  - `do X and take care` → sends `do X`
-  - `do X. see you later` → sends `do X`
-  - Multiline instructions may end with `Then exit.` on a separate line; preceding paragraphs and indentation are preserved.
+  - `do X and exit`
+  - `do X then exit!`
+  - `do X, exit after this`
+  - `do X; exit`
+  - `do X. exit`
+  - `Thanks, and exit!`
+  - `do X, farewell`
+  - `do X and take care`
+  - `do X. see you later`
+  - Multiline instructions may end with `Then exit.` on a separate line; the complete input is preserved.
 - Prompt-and-exit requires an OMP runtime that emits the `session_stop` extension hook.
 
 ## AI-assisted exit detection
