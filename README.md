@@ -45,6 +45,7 @@ See the [verification and release workflow](/docs/workflows/verification-and-rel
 - Farewells are anchored commands: requests that mention or quote one, such as `explain why people say farewell`, continue normally.
 - Prompt-and-exit commands leave the entire original input visible to the model, including the exit directive, paragraphs, and whitespace. The plugin also schedules native graceful shutdown from OMP's `session_stop` hook after the main-session response completes, preserving normal teardown and session output.
 - With `ompi` 0.9.2 or newer, immediate, prompt-and-exit, and AI-assisted exits override a queued restart instead of reopening the session. Update both packages and start a new process; older wrappers and already-running pre-update processes still let a pending restart consume a graceful exit.
+- Wrapped sessions print `ompi --resume SESSION_ID` instead of `omp --resume SESSION_ID`, retaining any native `--profile NAME` argument. This applies to native `/exit` as well as the plugin's exit paths. Plain OMP keeps its native hint; sessions never saved to disk still have no hint. Start a new process after updating the plugin.
 - Prompt-and-exit examples:
   - `do X and exit`
   - `do X then exit!`

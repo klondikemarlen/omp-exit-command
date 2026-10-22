@@ -15,7 +15,7 @@ The integration has been exercised on OMP 18.12.2; that is a verified baseline, 
 - Tool execution receives `(toolCallId, params, signal, onUpdate, ctx)`. The fifth argument is the context; do not search arbitrary arguments for one.
 - Deferred exits require the `session_stop` event and `ctx.shutdown()`.
 
-`index.js` owns deterministic classification and its pending session IDs. `ai-exit.js` owns the optional tool and its pending session IDs. The manifest loads the base extension unconditionally and the AI entry point through `ai-exit-detection`. Neither module owns process-wide mutable state or output formatting.
+`index.js` owns deterministic classification, its pending session IDs, and the bounded `ompi` resume-hint adapter described below. `ai-exit.js` owns the optional tool and its pending session IDs. The manifest loads the base extension unconditionally and the AI entry point through `ai-exit-detection`.
 
 ## Shutdown ownership
 
@@ -42,6 +42,14 @@ A pending exit is scoped to a session ID and consumed once. There is no context-
 Before handing an immediate exit to native `/exit`, or calling `ctx.shutdown()` for a deferred or AI-assisted exit, the plugin synchronously emits `omp-exit-command:exit-requested` on `pi.events` with `{ sessionId }` from the active context. A cooperating supervisor matches that ID to its main session and suppresses relaunch, even if a restart was already queued. The event announces explicit exit intent, not completed teardown; OMP still owns settlement and termination. Ordinary prompts and stop events without a matching pending exit do not emit it.
 
 `ompi` must implement this event contract to give explicit exit precedence. Without that consumer, the plugin still performs native shutdown, but an older wrapper may satisfy an accepted restart by reopening the session.
+
+### Wrapped resume hints
+
+OMP 18.12.6 hard-codes the native resume command and exposes no public override. At main-TUI `session_shutdown`, the base extension verifies `OMP_INSTANCE_CONTROL_LAUNCH_DIR` and `OMP_INSTANCE_CONTROL_LAUNCH_TOKEN` against the wrapper's version-1 `launch.json`, including its direct-parent PID. Inherited variables in nested OMP processes, peer-control-only installations, missing records, and mismatched tokens do not qualify.
+
+For a verified launch, a temporary `process.stderr.write` adapter recognizes only the complete final native hint for the active session ID and substitutes `ompi` for `omp`. It retains native profile arguments, resume flags, colors, and stream behavior, then restores the previous writer before forwarding that hint. All other output passes through unchanged. OMP still decides whether a persisted session has a hint and still owns teardown and termination; no second hint is printed.
+
+This is an explicit native-output compatibility boundary, verified on OMP 18.12.6 with `ompi` 0.10.1. An unrecognized future hint remains unchanged. Remove the adapter when OMP exposes a supported launcher/resume-command override; do not expand it into general output interception.
 
 ## Parsing invariants
 
