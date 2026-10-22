@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+
 const EXIT_DIRECTIVE = "(?:please\\s+)?(?:exit(?:\\s+after\\s+this(?:\\s+now)?)?|quit)"
 const CONVERSATIONAL_EXIT_COMMANDS = [
   "farewell",
@@ -30,6 +33,33 @@ export default function exitCommandExtension(pi) {
   pi.setLabel("Exit Command")
 
   const exitAfterResponseSessions = new Set()
+
+  pi.on("session_shutdown", (_event, ctx) => {
+    if (ctx.mode !== "tui" || ctx.agent.kind !== "main" || !isOmpiLaunch()) {
+      return
+    }
+
+    const sessionId = ctx.sessionManager.getSessionId()
+    const write = process.stderr.write
+
+    // OMP has no public resume-command override. Adapt only its final native
+    // hint, after shutdown hooks, without printing a second hint or owning exit.
+    process.stderr.write = function (chunk, ...args) {
+      if (typeof chunk === "string") {
+        const plain = chunk.replace(/\x1b\[[0-9;]*m/g, "")
+        const hint = plain.match(
+          /^\nResume this session with\nomp(?: --profile [a-z0-9][a-z0-9._-]{0,63})? (?:--resume|-r) ([^\s]+)\n$/
+        )
+
+        if (hint?.[1] === sessionId) {
+          process.stderr.write = write
+          return write.call(this, chunk.replace("omp ", "ompi "), ...args)
+        }
+      }
+
+      return write.call(this, chunk, ...args)
+    }
+  })
 
   pi.on("input", (event, ctx) => {
     const input = event.text.trim()
@@ -68,4 +98,19 @@ function isExitCommand(input) {
 
 function hasTrailingExitDirective(input) {
   return PROMPT_EXIT_PATTERNS.some((pattern) => pattern.test(input))
+}
+
+function isOmpiLaunch() {
+  const directory = process.env.OMP_INSTANCE_CONTROL_LAUNCH_DIR
+  const token = process.env.OMP_INSTANCE_CONTROL_LAUNCH_TOKEN
+  if (!directory || !token) return false
+
+  try {
+    const launch = JSON.parse(readFileSync(join(directory, "launch.json"), "utf8"))
+
+    // Nested OMP processes inherit these variables, but not the wrapper parent.
+    return launch.version === 1 && launch.token === token && launch.pid === process.ppid
+  } catch {
+    return false
+  }
 }
