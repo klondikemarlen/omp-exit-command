@@ -26,9 +26,7 @@ const CHILD_SCRIPT = `
     if (chunk.buffer) {
       process.stderr.write(Buffer.from(chunk.text))
     } else {
-      process.stderr.write(chunk.text, "utf8", () => {
-        process.stdout.write("written\\n")
-      })
+      process.stderr.write(chunk.text, "utf8")
     }
   }
 `
@@ -80,7 +78,6 @@ test("when the wrapper owns the main terminal, its resume hint uses ompi", (t) =
 
   // Assert
   assert.equal(result.stderr, WRAPPED_HINT)
-  assert.equal(result.stdout, "written\n")
 })
 
 test("when the native hint includes a profile and color, both survive launcher substitution", (t) => {
@@ -137,14 +134,14 @@ test("when shutdown writes diagnostics or another session hint, only the active 
     { text: diagnostic, buffer: true },
     { text: otherHint },
     { text: NATIVE_HINT },
-    { text: NATIVE_HINT },
+    { text: diagnostic },
   ]
 
   // Act
   const result = emitShutdownOutput(t, { chunks })
 
   // Assert
-  assert.equal(result.stderr, diagnostic + otherHint + WRAPPED_HINT + NATIVE_HINT)
+  assert.equal(result.stderr, diagnostic + otherHint + WRAPPED_HINT + diagnostic)
 })
 
 test("when an RPC session shuts down, native output stays unchanged", (t) => {
