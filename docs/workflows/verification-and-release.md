@@ -10,7 +10,7 @@ npm pack --dry-run
 git diff --check
 ```
 
-There is no Docker wrapper, compiler, formatter, or separate CI gate configured. The test suite uses `node:test` and public OMP-shaped callbacks: `{ type: "input", text, source: "interactive" }`, a session manager exposing `getSessionId()`, and the tool context in argument five. Cover observable classification, unchanged prompt content, session isolation, and one-shot exit consumption. Do not assert copied native output wording in a unit mock; verify native output in a real process.
+There is no Docker wrapper, compiler, formatter, or separate CI gate configured. The test suite uses `node:test` and public OMP-shaped callbacks: `{ type: "input", text, source: "interactive" }`, a session manager exposing `getSessionId()`, and the tool context in argument five. Cover observable classification, unchanged prompt content, session isolation, and one-shot exit consumption. The resume-output adapter has child-process fixtures for its explicit native-output boundary, launcher identity, and stream behavior; these do not replace real-process verification against the installed OMP.
 
 For a committed branch, check whitespace against the PR base (`git diff origin/main...HEAD --check`); for staged changes use `git diff --cached --check`.
 
@@ -60,6 +60,8 @@ omp --resume SESSION_ID --no-extensions --no-title
 omp --resume SESSION_ID --no-extensions -e ./index.js -e ./ai-exit.js --no-title
 ```
 
+For managed-wrapper checks, omit `--no-extensions`: `ompi` deliberately treats it as passthrough and supplies no launcher identity. Use an isolated config/session directory with normal extension discovery and explicit local `-e` paths, or verify the released installed plugin in a new managed process.
+
 | Scenario | Action | Required result |
 | --- | --- | --- |
 | Native baseline | In the first command, type `/exit` | OMP completes teardown and shows the saved-session resume information. |
@@ -69,6 +71,7 @@ omp --resume SESSION_ID --no-extensions -e ./index.js -e ./ai-exit.js --no-title
 | AI-assisted | Ask the assistant to call `exit_after_response` and then reply | The tool schedules shutdown for its own session; the final reply finishes before exit. |
 | Unsaved session | Start with an empty temporary session directory, then type `exit` | Match native `/exit` for that same setup; do not fabricate a resume hint. |
 | Autocomplete | Type `/exi`, press Tab, then Enter | Native `/exit` is offered, completed, and executed. |
+| Wrapped resume hint | In a saved `ompi` session, exit through native `/exit` and the plugin paths; repeat with a named profile | Exactly one hint uses `ompi` and the active session ID, preserving any `--profile` argument. Plain OMP still prints `omp`. |
 | Queued `ompi` restart | In a disposable wrapped session, accept a targeted restart while a prompt-and-exit turn is active | The reply finishes, native teardown and session information complete, and the wrapper exits without relaunching. |
 | Ordinary `ompi` restart | Request a targeted restart without exit intent | The wrapper relaunches once into the same persisted session; explicit-exit coordination must not suppress ordinary restart. |
 
