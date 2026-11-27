@@ -78,7 +78,6 @@ export default function aiExitExtension(pi) {
       kind: zod.enum(["suggestion", "checkout_switch", "wrap_up_blocked"]),
       suggestion: zod.string().optional().describe("Copyable text for suggestion; omit if there is no useful guess."),
       directory: zod.string().optional().describe("Resolved absolute directory for checkout_switch, if known."),
-      reason: zod.string().optional().describe("What prevented successful wrap-up for wrap_up_blocked."),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId()

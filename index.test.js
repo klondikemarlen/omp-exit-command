@@ -176,7 +176,8 @@ test("when another session stops, the AI exit request remains pending", async ()
   assert.equal(contextA.shutdowns, 1)
 })
 
-test("an exit suggestion supersedes a deterministic arm and waits for this session to stop", async () => {
+test("when an exit suggestion supersedes a deterministic arm, only the matching session exits once", async () => {
+  // Arrange
   const { input, session_stop, tools, exitRequests } = loadHandlers(exitCommandExtension, aiExitExtension)
   const context = createContext("session-a")
   const otherContext = createContext("session-b")
@@ -191,27 +192,37 @@ test("an exit suggestion supersedes a deterministic arm and waits for this sessi
     source: "interactive",
   }, otherContext)
 
+  // Act
   const result = await executeExitTool(tools.exit_with_follow_up, {
     kind: "suggestion",
     suggestion: "printf '%s\\n' 'just text'",
   }, context)
+
+  // Assert
   assert.match(result, /Nothing was run or queued/)
   assert.deepEqual(exitRequests, [])
   assert.equal(context.shutdowns, 0)
   assert.equal(context.aborted, false)
 
+  // Act
   await session_stop({}, otherContext)
+
+  // Assert
   assert.deepEqual(exitRequests, ["session-b"])
   assert.equal(otherContext.shutdowns, 1)
   assert.equal(context.shutdowns, 0)
 
+  // Act
   await session_stop({}, context)
   await session_stop({}, context)
+
+  // Assert
   assert.deepEqual(exitRequests, ["session-b", "session-a"])
   assert.equal(context.shutdowns, 1)
 })
 
-test("a checkout refusal or blocked wrap-up cancels both exit routes and stays open", async () => {
+test("when a checkout switch is refused or wrap-up is blocked, only a fresh standalone exit closes the session", async () => {
+  // Arrange
   for (const [decision, reason] of [
     [
       {
@@ -229,7 +240,6 @@ test("a checkout refusal or blocked wrap-up cancels both exit routes and stays o
     [
       {
         kind: "wrap_up_blocked",
-        reason: "Required verification did not pass.",
       },
       /wrap-up has not succeeded/,
     ],
@@ -251,30 +261,36 @@ test("a checkout refusal or blocked wrap-up cancels both exit routes and stays o
         await executeExitTool(tools.exit_after_response, ordinaryExit, context)
       }
 
+      // Act
       const result = await executeExitTool(tools.exit_with_follow_up, decision, context)
-      assert.match(result, reason)
       const retry = await executeExitTool(tools.exit_after_response, ordinaryExit, context)
-      assert.match(retry, /staying open/)
       const suggestionRetry = await executeExitTool(tools.exit_with_follow_up, {
         kind: "suggestion",
         suggestion: "not an acceptable fallback",
       }, context)
-      assert.match(suggestionRetry, /staying open/)
 
       await session_stop({}, context)
       const continuationRetry = await executeExitTool(tools.exit_after_response, ordinaryExit, context)
-      assert.match(continuationRetry, /staying open/)
       await session_stop({}, context)
+
+      // Assert
+      assert.match(result, reason)
+      assert.match(retry, /staying open/)
+      assert.match(suggestionRetry, /staying open/)
+      assert.match(continuationRetry, /staying open/)
       assert.deepEqual(exitRequests, [])
       assert.equal(context.shutdowns, 0)
       assert.equal(context.aborted, false)
     }
 
+    // Act
     const immediate = await input({
       type: "input",
       text: "exit",
       source: "interactive",
     }, context)
+
+    // Assert
     assert.deepEqual(immediate, {
       text: "/exit",
     })
@@ -284,41 +300,54 @@ test("a checkout refusal or blocked wrap-up cancels both exit routes and stays o
   }
 })
 
-test("a follow-up suggestion remains literal in terminal output after teardown", () => {
+test("when a follow-up suggestion contains shell syntax, it remains literal output after teardown", () => {
+  // Arrange
   const suggestion = "printf '%s\\n' '$(touch not-run); text'\n# A second copyable line"
+
+  // Act
   const result = runSuggestionExit({
     suggestion,
   })
 
+  // Assert
   assert.equal(result.status, 0, result.stderr)
   assert.equal(result.stdout, `native shutdown requested\nterminal teardown finished\n\nSuggestion only — not run\n${suggestion}\n`)
   assert.equal(result.stderr, "")
 })
 
-test("an absent, blank, or terminal-control suggestion prints no invented command", () => {
+test("when a suggestion is absent, blank, or unsafe for the terminal, exit prints a no-guess notice", () => {
+  // Arrange
   for (const suggestion of [undefined, "  \t\n", "echo\x1b]0;title\x07\x9b31m\rcommand"]) {
+    // Act
     const result = runSuggestionExit({
       suggestion,
     })
 
+    // Assert
     assert.equal(result.status, 0, result.stderr)
     assert.equal(result.stdout, "native shutdown requested\nterminal teardown finished\n\nSuggestion only — not run\nNo useful next action could be suggested.\n")
     assert.equal(result.stderr, "")
   }
 })
 
-test("a suggestion cannot replay after unrelated teardown or failed exit", () => {
+test("when the matching session does not stop or the process fails, no suggestion is printed", () => {
+  // Arrange
+  const suggestion = "keep me out of other exits"
+
+  // Act
   const withoutStop = runSuggestionExit({
-    suggestion: "keep me out of other exits",
+    suggestion,
     skipStop: true,
   })
-  assert.equal(withoutStop.status, 0, withoutStop.stderr)
-  assert.equal(withoutStop.stdout, "terminal teardown finished\n")
 
   const failedExit = runSuggestionExit({
-    suggestion: "keep me out of failed exits",
+    suggestion,
     exitCode: 1,
   })
+
+  // Assert
+  assert.equal(withoutStop.status, 0, withoutStop.stderr)
+  assert.equal(withoutStop.stdout, "terminal teardown finished\n")
   assert.equal(failedExit.status, 1, failedExit.stderr)
   assert.equal(failedExit.stdout, "native shutdown requested\nterminal teardown finished\n")
 })
