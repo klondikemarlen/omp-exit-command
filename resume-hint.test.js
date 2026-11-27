@@ -13,6 +13,9 @@ const CHILD_SCRIPT = `
 
   const handlers = {}
   extension({
+    events: {
+      on() {},
+    },
     setLabel() {},
     on(event, handler) { handlers[event] = handler },
   })

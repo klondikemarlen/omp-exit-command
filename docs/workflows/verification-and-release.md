@@ -27,6 +27,9 @@ import extension from "./index.js"
 const handlers = {}
 extension({
   setLabel() {},
+  events: {
+    on() {},
+  },
   on(event, handler) { handlers[event] = handler },
 })
 const ctx = {

@@ -34,6 +34,10 @@ export default function exitCommandExtension(pi) {
 
   const exitAfterResponseSessions = new Set()
 
+  pi.events.on("omp-exit-command:take-over-deferred-exit", ({ sessionId }) => {
+    exitAfterResponseSessions.delete(sessionId)
+  })
+
   pi.on("session_shutdown", (_event, ctx) => {
     if (ctx.mode !== "tui" || ctx.agent.kind !== "main" || !isOmpiLaunch()) {
       return
