@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { spawnSync } from "node:child_process"
 import { EventEmitter } from "node:events"
 import { test } from "node:test"
 
@@ -175,6 +176,182 @@ test("when another session stops, the AI exit request remains pending", async ()
   assert.equal(contextA.shutdowns, 1)
 })
 
+test("when an exit suggestion supersedes a deterministic arm, only the matching session exits once", async () => {
+  // Arrange
+  const { input, session_stop, tools, exitRequests } = loadHandlers(exitCommandExtension, aiExitExtension)
+  const context = createContext("session-a")
+  const otherContext = createContext("session-b")
+  await input({
+    type: "input",
+    text: "Propose a shell command for later, then exit.",
+    source: "interactive",
+  }, context)
+  await input({
+    type: "input",
+    text: "Summarize and exit.",
+    source: "interactive",
+  }, otherContext)
+
+  // Act
+  const result = await executeExitTool(tools.exit_with_follow_up, {
+    kind: "suggestion",
+    suggestion: "printf '%s\\n' 'just text'",
+  }, context)
+
+  // Assert
+  assert.match(result, /Nothing was run or queued/)
+  assert.deepEqual(exitRequests, [])
+  assert.equal(context.shutdowns, 0)
+  assert.equal(context.aborted, false)
+
+  // Act
+  await session_stop({}, otherContext)
+
+  // Assert
+  assert.deepEqual(exitRequests, ["session-b"])
+  assert.equal(otherContext.shutdowns, 1)
+  assert.equal(context.shutdowns, 0)
+
+  // Act
+  await session_stop({}, context)
+  await session_stop({}, context)
+
+  // Assert
+  assert.deepEqual(exitRequests, ["session-b", "session-a"])
+  assert.equal(context.shutdowns, 1)
+})
+
+test("when a checkout switch is refused or wrap-up is blocked, only a fresh standalone exit closes the session", async () => {
+  // Arrange
+  for (const [decision, reason] of [
+    [
+      {
+        kind: "checkout_switch",
+        directory: "/tmp/check out;not a command",
+      },
+      /no cooperating checkout launcher/,
+    ],
+    [
+      {
+        kind: "checkout_switch",
+      },
+      /checkout directory is not resolved/,
+    ],
+    [
+      {
+        kind: "wrap_up_blocked",
+      },
+      /wrap-up has not succeeded/,
+    ],
+  ]) {
+    const { input, session_stop, tools, exitRequests } = loadHandlers(exitCommandExtension, aiExitExtension)
+    const context = createContext()
+
+    // A refusal must cancel both deterministic and already-armed AI exits.
+    for (const armOrdinaryAiExit of [false, true]) {
+      await input({
+        type: "input",
+        text: "Finish the work, then exit.",
+        source: "interactive",
+      }, context)
+      const ordinaryExit = {
+        reason: "Exit as requested.",
+      }
+      if (armOrdinaryAiExit) {
+        await executeExitTool(tools.exit_after_response, ordinaryExit, context)
+      }
+
+      // Act
+      const result = await executeExitTool(tools.exit_with_follow_up, decision, context)
+      const retry = await executeExitTool(tools.exit_after_response, ordinaryExit, context)
+      const suggestionRetry = await executeExitTool(tools.exit_with_follow_up, {
+        kind: "suggestion",
+        suggestion: "not an acceptable fallback",
+      }, context)
+
+      await session_stop({}, context)
+      const continuationRetry = await executeExitTool(tools.exit_after_response, ordinaryExit, context)
+      await session_stop({}, context)
+
+      // Assert
+      assert.match(result, reason)
+      assert.match(retry, /staying open/)
+      assert.match(suggestionRetry, /staying open/)
+      assert.match(continuationRetry, /staying open/)
+      assert.deepEqual(exitRequests, [])
+      assert.equal(context.shutdowns, 0)
+      assert.equal(context.aborted, false)
+    }
+
+    // Act
+    const immediate = await input({
+      type: "input",
+      text: "exit",
+      source: "interactive",
+    }, context)
+
+    // Assert
+    assert.deepEqual(immediate, {
+      text: "/exit",
+    })
+    assert.deepEqual(exitRequests, ["test-session"])
+    assert.equal(context.aborted, true)
+    assert.equal(context.shutdowns, 0)
+  }
+})
+
+test("when a follow-up suggestion contains shell syntax, it remains literal output after teardown", () => {
+  // Arrange
+  const suggestion = "printf '%s\\n' '$(touch not-run); text'\n# A second copyable line"
+
+  // Act
+  const result = runSuggestionExit({
+    suggestion,
+  })
+
+  // Assert
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.stdout, `native shutdown requested\nterminal teardown finished\n\nSuggestion only — not run\n${suggestion}\n`)
+  assert.equal(result.stderr, "")
+})
+
+test("when a suggestion is absent, blank, or unsafe for the terminal, exit prints a no-guess notice", () => {
+  // Arrange
+  for (const suggestion of [undefined, "  \t\n", "echo\x1b]0;title\x07\x9b31m\rcommand"]) {
+    // Act
+    const result = runSuggestionExit({
+      suggestion,
+    })
+
+    // Assert
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(result.stdout, "native shutdown requested\nterminal teardown finished\n\nSuggestion only — not run\nNo useful next action could be suggested.\n")
+    assert.equal(result.stderr, "")
+  }
+})
+
+test("when the matching session does not stop or the process fails, no suggestion is printed", () => {
+  // Arrange
+  const suggestion = "keep me out of other exits"
+
+  // Act
+  const withoutStop = runSuggestionExit({
+    suggestion,
+    skipStop: true,
+  })
+
+  const failedExit = runSuggestionExit({
+    suggestion,
+    exitCode: 1,
+  })
+
+  // Assert
+  assert.equal(withoutStop.status, 0, withoutStop.stderr)
+  assert.equal(withoutStop.stdout, "terminal teardown finished\n")
+  assert.equal(failedExit.status, 1, failedExit.stderr)
+  assert.equal(failedExit.stdout, "native shutdown requested\nterminal teardown finished\n")
+})
+
 test("when a prompt ends with an exit phrase, it runs before shutdown", async () => {
   // Arrange
   for (const prompt of [
@@ -275,39 +452,108 @@ test("when the active session changes, deferred exit follows the session id", as
   assert.equal(context.shutdowns, 1)
 })
 
-function loadHandlers(extension = exitCommandExtension) {
-  const handlers = {}
+async function executeExitTool(tool, params, context) {
+  const result = await tool.execute("tool-call-id", params, undefined, undefined, context)
+  return result.content[0].text
+}
+
+function runSuggestionExit(options) {
+  const script = `
+    import { EventEmitter } from "node:events"
+    import aiExitExtension from "./ai-exit.js"
+
+    ${loadHandlers.toString()}
+    ${createContext.toString()}
+    ${executeExitTool.toString()}
+
+    const { suggestion, skipStop, exitCode } = JSON.parse(process.argv[1])
+    const { session_stop, session_shutdown, tools } = loadHandlers(aiExitExtension)
+    const context = createContext("matching-session")
+    context.shutdown = () => console.log("native shutdown requested")
+
+    await executeExitTool(tools.exit_with_follow_up, { kind: "suggestion", suggestion }, context)
+    if (!skipStop) {
+      await session_stop({}, context)
+    }
+    await session_shutdown({}, createContext("other-session"))
+    await session_shutdown({}, context)
+    await session_shutdown({}, context)
+    console.log("terminal teardown finished")
+    process.exitCode = exitCode ?? 0
+  `
+
+  return spawnSync(process.execPath, ["--input-type=module", "--eval", script, JSON.stringify(options)], {
+    cwd: new URL(".", import.meta.url),
+    encoding: "utf8",
+  })
+}
+
+function loadHandlers(...extensions) {
+  const eventHandlers = {}
+  const exitRequests = []
   const tools = {}
+  const schema = {
+    describe() {
+      return this
+    },
+    optional() {
+      return this
+    },
+  }
   const pi = {
     events: new EventEmitter(),
     setLabel() {},
     on(eventName, handler) {
-      handlers[eventName] = handler
+      eventHandlers[eventName] ??= []
+      eventHandlers[eventName].push(handler)
     },
     registerTool(tool) {
       tools[tool.name] = tool
     },
     zod: {
+      enum() {},
       object(shape) {
         return { shape }
       },
       string() {
-        return {
-          describe(description) {
-            return { description }
-          },
-        }
+        return schema
       },
     },
   }
 
-  extension(pi)
+  pi.events.on("omp-exit-command:exit-requested", ({ sessionId }) => exitRequests.push(sessionId))
 
-  return { ...handlers, tools }
+  for (const extension of extensions.length ? extensions : [exitCommandExtension]) {
+    extension(pi)
+  }
+
+  const handlers = {}
+  for (const [eventName, callbacks] of Object.entries(eventHandlers)) {
+    handlers[eventName] = async (event, ctx) => {
+      let result
+      for (const callback of callbacks) {
+        const response = await callback(event, ctx)
+        if (response !== undefined) {
+          result = response
+        }
+      }
+      return result
+    }
+  }
+
+  return {
+    ...handlers,
+    tools,
+    exitRequests,
+  }
 }
 
 function createContext(sessionId = "test-session") {
   return {
+    mode: "tui",
+    agent: {
+      kind: "main",
+    },
     sessionManager: {
       getSessionId() {
         return sessionId

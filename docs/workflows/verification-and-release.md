@@ -29,6 +29,9 @@ import extension from "./index.js"
 const handlers = {}
 extension({
   setLabel() {},
+  events: {
+    on() {},
+  },
   on(event, handler) { handlers[event] = handler },
 })
 const ctx = {
@@ -71,6 +74,8 @@ For managed-wrapper checks, omit `--no-extensions`: `ompi` deliberately treats i
 | Deferred | Type `Reply with exactly EXIT_OK and exit` | The complete prompt, including the directive, reaches the model; the reply finishes before native shutdown. |
 | Multiline deferred | Paste `Reply with exactly EXIT_OK.`, a blank line, `Do not change files.`, then `Then exit.` on its own line | The saved user message retains the entire original input, including the final directive; the reply finishes before native shutdown. |
 | AI-assisted | Ask the assistant to call `exit_after_response` and then reply | The tool schedules shutdown for its own session; the final reply finishes before exit. |
+| Suggestion only | Ask “Wrap up and exit, then suggest how to list Git branches by last commit.” | After a successful response, the labeled suggestion remains readable after teardown. The parent prompt is empty; pressing Enter runs nothing. |
+| Checkout launch unavailable | Ask “Exit and open my other checkout in `ompi`.” | Report the unsupported switch and remain in the current session. A same-turn plain-exit retry must not close it. A new explicit `exit` still works. |
 | Unsaved session | Start with an empty temporary session directory, then type `exit` | Match native `/exit` for that same setup; do not fabricate a resume hint. |
 | Autocomplete | Type `/exi`, press Tab, then Enter | Native `/exit` is offered, completed, and executed. |
 | Wrapped resume hint | In a saved `ompi` session, exit through native `/exit` and the plugin paths; repeat with a named profile | Exactly one hint uses `ompi` and the active session ID, preserving any `--profile` argument. Plain OMP still prints `omp`. |

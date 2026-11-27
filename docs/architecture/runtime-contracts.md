@@ -15,7 +15,7 @@ The integration has been exercised on OMP 18.12.2; that is a verified baseline, 
 - Tool execution receives `(toolCallId, params, signal, onUpdate, ctx)`. The fifth argument is the context; do not search arbitrary arguments for one.
 - Deferred exits require the `session_stop` event and `ctx.shutdown()`.
 
-`index.js` owns deterministic classification, its pending session IDs, and the bounded `ompi` resume-hint adapter described below. `ai-exit.js` owns the optional tool and its pending session IDs. The manifest loads the base extension unconditionally and the AI entry point through `ai-exit-detection`.
+`index.js` owns deterministic classification, its pending session IDs, and the bounded `ompi` resume-hint adapter described below. `ai-exit.js` owns the optional AI exit tools and their session-scoped decisions. The manifest loads the base extension unconditionally and the AI entry point through `ai-exit-detection`.
 
 ## Shutdown ownership
 
@@ -39,9 +39,11 @@ Immediate exits abort the active turn before returning `{ text: "/exit" }`. Retu
 
 A pending exit is scoped to a session ID and consumed once. There is no context-free "next session stop" fallback: an unrelated session must not inherit an exit request. Native shutdown is responsible for asynchronous `session_shutdown` hooks and for deciding whether a persisted session has a resume hint. Do not print a duplicate hint, manufacture an ID, or add a timer calling `process.exit()`.
 
+When the AI handles a follow-up request, its decision must replace any deterministic deferred exit for the same session. Otherwise a blocked wrap-up or an unsupported checkout launch could leave one handler refusing to exit while the other still shuts down. A suggestion is output text only; it does not become a launcher request or terminal input.
+
 Before handing an immediate exit to native `/exit`, or calling `ctx.shutdown()` for a deferred or AI-assisted exit, the plugin synchronously emits `omp-exit-command:exit-requested` on `pi.events` with `{ sessionId }` from the active context. A cooperating supervisor matches that ID to its main session and suppresses relaunch, even if a restart was already queued. The event announces explicit exit intent, not completed teardown; OMP still owns settlement and termination. Ordinary prompts and stop events without a matching pending exit do not emit it.
 
-`ompi` must implement this event contract to give explicit exit precedence. Without that consumer, the plugin still performs native shutdown, but an older wrapper may satisfy an accepted restart by reopening the session.
+`ompi` must implement this event contract to give explicit exit precedence. The [0.9.2 consumer](https://github.com/klondikemarlen/omp-instance-control/blob/475e70b4d62f79e5af997687536a00129d9b78cf/omp/index.js#L55-L82) records matching exit intent and [suppresses the restart handoff](https://github.com/klondikemarlen/omp-instance-control/blob/475e70b4d62f79e5af997687536a00129d9b78cf/omp/index.js#L299-L307). Without that consumer, the plugin still performs native shutdown, but an older wrapper may satisfy an accepted restart by reopening the session.
 
 ### Wrapped resume hints
 
