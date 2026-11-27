@@ -2,7 +2,8 @@ import { writeSync } from "node:fs"
 import { isAbsolute } from "node:path"
 
 const TAKE_OVER_DEFERRED_EXIT = "omp-exit-command:take-over-deferred-exit"
-const TERMINAL_CONTROLS = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/
+// Suggestions may contain line feeds and tabs, but no other control characters.
+const TERMINAL_CONTROLS = /(?![\n\t])\p{Cc}/u
 const EXIT_REFUSED = "OMP is staying open. Do not retry with exit_after_response in this turn."
 
 export default function aiExitExtension(pi) {
