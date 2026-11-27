@@ -50,6 +50,7 @@ export default function exitCommandExtension(pi) {
     // hint, after shutdown hooks, without printing a second hint or owning exit.
     process.stderr.write = function (chunk, ...args) {
       if (typeof chunk === "string") {
+        // oxlint-disable-next-line no-control-regex -- Only ANSI SGR may be ignored when matching the native hint; other terminal controls must not qualify.
         const plain = chunk.replace(/\x1b\[[0-9;]*m/g, "")
         const hint = plain.match(
           /^\nResume this session with\nomp(?: --profile [a-z0-9][a-z0-9._-]{0,63})? (?:--resume|-r) ([^\s]+)\n$/

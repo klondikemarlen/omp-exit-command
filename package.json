@@ -5,7 +5,11 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "lint": "oxlint --deny-warnings",
     "test": "node --test"
+  },
+  "devDependencies": {
+    "oxlint": "1.95.0"
   },
   "repository": {
     "type": "git",

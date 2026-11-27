@@ -5,6 +5,8 @@
 Run from the repository root:
 
 ```sh
+npm ci
+npm run lint
 npm test
 npm pack --dry-run
 git diff --check
