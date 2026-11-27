@@ -75,6 +75,12 @@ When enabled, the plugin loads an `exit_after_response` tool. The assistant may 
 
 The tool description tells the assistant not to call it for instructions about exiting other programs, such as `tell me how to exit vim`.
 
+### Suggest a command for after exit
+
+For example, ask: “Wrap up and exit, then suggest how I could list the branches by last commit.” After a successful wrap-up, the agent can leave a copyable command labeled **Suggestion only — not run**. The command is text: nothing queues it, types it at the shell prompt, or executes it. If there is no meaningful suggestion, the agent can say so and still exit.
+
+“Exit and open another checkout in `ompi`” is a request to launch, not a request for a suggestion. Until a cooperating launcher supports an approved checkout switch, the agent should explain that limitation and stay open. Standalone `exit` still goes directly to native exit without consulting the agent.
+
 ## Maintainer knowledge base
 
 The [maintainer guide](/docs/README.md) covers runtime contracts, parsing and shutdown invariants, the JavaScript decision, and reproducible QA.
