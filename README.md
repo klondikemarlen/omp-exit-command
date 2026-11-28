@@ -79,7 +79,13 @@ The tool description tells the assistant not to call it for instructions about e
 
 For example, ask: “Wrap up and exit, then suggest how I could list the branches by last commit.” After a successful wrap-up, the agent can leave a copyable command labeled **Suggestion only — not run**. The command is text: nothing queues it, types it at the shell prompt, or executes it. If there is no meaningful suggestion, the agent can say so and still exit.
 
-“Exit and open another checkout in `ompi`” is a request to launch, not a request for a suggestion. Until a cooperating launcher supports an approved checkout switch, the agent should explain that limitation and stay open. Standalone `exit` still goes directly to native exit without consulting the agent.
+### Open a checkout after exit
+
+In a managed `ompi` session, ask “Wrap up and exit, then start `ompi` in my `omp-tab-tether` checkout.” Review the resolved directory and approve the switch. After the final reply and native teardown, the same terminal opens a **fresh conversation** there. Only the destination directory is passed to the launcher; no generated shell command is evaluated. The calling shell’s working directory does not change. The new session loads its normal extensions, so approve only a checkout you trust.
+
+As specified in [the checkout-switch request](https://github.com/klondikemarlen/omp-exit-command/issues/42), an unclear next action is only a suggestion. A clear checkout switch that fails is different: you asked to open a particular directory, so OMP stays open rather than silently dropping that step.
+
+This requires a running launcher and adapter that support the [`ompi` fresh-launch contract](https://github.com/klondikemarlen/omp-instance-control/blob/b08cb2e68a4269d80021659e170fb26a63582a67/CONCEPTS.md). Cancelling, an invalid destination, or an unsupported launcher leaves the session open. Standalone `exit` still goes directly to native exit without consulting the agent.
 
 ## Maintainer knowledge base
 

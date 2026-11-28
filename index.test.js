@@ -1,6 +1,9 @@
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
 import { EventEmitter } from "node:events"
+import { mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { test } from "node:test"
 
 import exitCommandExtension from "./index.js"
@@ -300,6 +303,329 @@ test("when a checkout switch is refused or wrap-up is blocked, only a fresh stan
   }
 })
 
+test("when a checkout switch is approved, the canonical path is shown literally and the launcher commits only after the final reply", async (t) => {
+  // Arrange
+  const { input, session_stop, tools, events, exitRequests } = loadHandlers(exitCommandExtension, aiExitExtension)
+  const context = createContext("session-a")
+  const directory = makeCheckout(t, "with spaces; $(not-run) [name]")
+  const alias = join(directory, "..", "symlink")
+  symlinkSync(directory, alias)
+  const { promise, approve } = heldApproval()
+  const launcherCalls = recordLauncher(events)
+  context.ui.confirm = (title, detail, options) => {
+    assert.equal(title, "Open a fresh ompi session?")
+    assert.equal(detail, directory)
+    assert.equal(options.initialIndex, 1)
+    assert.equal(options.signal.aborted, false)
+    return promise
+  }
+  await input({
+    type: "input",
+    text: "Finish wrapping up, then exit.",
+    source: "interactive",
+  }, context)
+
+  // Act
+  const approval = requestCheckout(tools, context, alias)
+
+  // Assert
+  assert.deepEqual(launcherCalls, [])
+  assert.equal(context.shutdowns, 0)
+
+  // Act
+  approve()
+  const result = await approval
+  const ordinaryRetry = await executeExitTool(tools.exit_after_response, {
+    reason: "Old plain exit.",
+  }, context)
+  const suggestionRetry = await executeExitTool(tools.exit_with_follow_up, {
+    kind: "suggestion",
+    suggestion: "not a fallback",
+  }, context)
+  const checkoutRetry = await requestCheckout(tools, context, "/tmp")
+  await session_stop(finalReply("session-b"), context)
+  await session_stop(finalReply("session-a"), createContext("session-b"))
+
+  // Assert
+  assert.match(result, /approved and prepared/)
+  assert.match(ordinaryRetry, /already in progress/)
+  assert.match(suggestionRetry, /already in progress/)
+  assert.match(checkoutRetry, /already in progress/)
+  assert.deepEqual(launcherCalls, [
+    ["prepare", {
+      sessionId: "session-a",
+      directory,
+    }],
+  ])
+  assert.equal(context.shutdowns, 0)
+
+  // Act
+  await session_stop(finalReply("session-a"), context)
+  await session_stop(finalReply("session-a"), context)
+
+  // Assert
+  assert.deepEqual(launcherCalls.slice(1), [
+    ["commit", {
+      sessionId: "session-a",
+      ticket: "ticket-a",
+    }],
+  ])
+  assert.deepEqual(exitRequests, [])
+  assert.equal(context.shutdowns, 0, "the launcher alone requests shutdown")
+})
+
+test("when checkout approval is not explicit, the switch is refused and same-turn exit is blocked", async (t) => {
+  // Arrange
+  const directory = makeCheckout(t)
+  for (const answer of [false, undefined, "Yes", new Error("dialog failed")]) {
+    const { session_stop, tools, events, exitRequests } = loadHandlers(aiExitExtension)
+    const context = createContext()
+    const launcherCalls = recordLauncher(events)
+    context.ui.confirm = async () => {
+      if (answer instanceof Error) throw answer
+
+      return answer
+    }
+
+    // Act
+    const refusal = await requestCheckout(tools, context, directory)
+    const retry = await executeExitTool(tools.exit_after_response, {
+      reason: "Try a plain exit.",
+    }, context)
+    await session_stop(finalReply("test-session"), context)
+
+    // Assert
+    assert.match(refusal, /not approved/)
+    assert.match(retry, /staying open/)
+    assert.match(context.notices[0], /not approved.*staying open/)
+    assert.deepEqual(launcherCalls, [])
+    assert.deepEqual(exitRequests, [])
+    assert.equal(context.shutdowns, 0)
+  }
+})
+
+test("when the checkout path is unresolved or unsafe or the session is not the main terminal, neither the dialog nor the launcher runs", async (t) => {
+  // Arrange
+  const directory = makeCheckout(t)
+  const parent = join(directory, "..")
+  const unsafeDirectory = join(parent, "bidi\u202Echeckout")
+  const disguisedPath = join(parent, "safe alias")
+  mkdirSync(unsafeDirectory)
+  symlinkSync(unsafeDirectory, disguisedPath)
+
+  for (const [destination, mode, kind, reason] of [
+    [directory, "tui", "sub", /main interactive terminal/],
+    [directory, "rpc", "main", /main interactive terminal/],
+    ["relative", "tui", "main", /not resolved/],
+    [join(parent, "missing"), "tui", "main", /missing/],
+    [join(directory, "bell\u0007name"), "tui", "main", /safely displayed/],
+    [disguisedPath, "tui", "main", /safely displayed/],
+  ]) {
+    const { tools, events } = loadHandlers(aiExitExtension)
+    const context = createContext()
+    context.mode = mode
+    context.agent.kind = kind
+    let confirmations = 0
+    context.ui.confirm = async () => {
+      confirmations += 1
+      return true
+    }
+    const launcherCalls = recordLauncher(events)
+
+    // Act
+    const refusal = await requestCheckout(tools, context, destination)
+
+    // Assert
+    assert.match(refusal, reason)
+    assert.equal(confirmations, 0)
+    assert.deepEqual(launcherCalls, [])
+    assert.equal(context.shutdowns, 0)
+  }
+})
+
+test("when the launcher returns a value without mutating the envelope, the switch is unsupported and no exit is armed", async (t) => {
+  // Arrange
+  const { tools, session_stop, events, exitRequests } = loadHandlers(aiExitExtension)
+  const context = createContext()
+  const directory = makeCheckout(t)
+  events.on("omp-instance-control:fresh-launch:prepare", () => ({
+    status: "accepted",
+    ticket: "not-in-the-envelope",
+  }))
+
+  // Act
+  const refusal = await requestCheckout(tools, context, directory)
+  await session_stop(finalReply("test-session"), context)
+
+  // Assert
+  assert.match(refusal, /no cooperating checkout launcher/)
+  assert.match(context.notices[0], /no cooperating checkout launcher/)
+  assert.deepEqual(exitRequests, [])
+  assert.equal(context.shutdowns, 0)
+})
+
+test("when the launcher refuses preparation, the session stays open and shows the error", async (t) => {
+  // Arrange
+  const { tools, session_stop, events, exitRequests } = loadHandlers(aiExitExtension)
+  const context = createContext()
+  const directory = makeCheckout(t)
+  events.on("omp-instance-control:fresh-launch:prepare", (envelope) => {
+    envelope.result = {
+      status: "refused",
+      message: "A fresh launch is already prepared for this terminal.",
+    }
+  })
+
+  // Act
+  const refusal = await requestCheckout(tools, context, directory)
+  const retry = await executeExitTool(tools.exit_after_response, {
+    reason: "Try a plain exit.",
+  }, context)
+  await session_stop(finalReply("test-session"), context)
+
+  // Assert
+  assert.match(refusal, /already prepared/)
+  assert.match(context.notices[0], /already prepared/)
+  assert.match(retry, /staying open/)
+  assert.deepEqual(exitRequests, [])
+  assert.equal(context.shutdowns, 0)
+})
+
+test("when approval arrives after user input or another interruption, no ticket is prepared", async (t) => {
+  // Arrange
+  const directory = makeCheckout(t)
+  for (const interruption of ["input", "session_switch", "abort", "replace_directory"]) {
+    const handlers = loadHandlers(aiExitExtension)
+    const { tools, events, session_stop, exitRequests } = handlers
+    const context = createContext()
+    const { promise, approve } = heldApproval()
+    const cancellation = new AbortController()
+    const launcherCalls = recordLauncher(events)
+    let dialogSignal
+    context.ui.confirm = (_title, _detail, options) => {
+      dialogSignal = options.signal
+      return promise
+    }
+
+    // Act
+    const approval = requestCheckout(tools, context, directory, cancellation.signal)
+    if (interruption === "input") {
+      await handlers.input({
+        source: "interactive",
+        text: "Keep this terminal open.",
+      }, context)
+    } else if (interruption === "session_switch") {
+      await handlers.session_switch({}, createContext("other-session"))
+    } else if (interruption === "abort") {
+      cancellation.abort()
+    } else {
+      renameSync(directory, `${directory}-original`)
+      mkdirSync(directory)
+    }
+    approve()
+    const refusal = await approval
+    await session_stop(finalReply("test-session"), context)
+
+    // Assert
+    assert.match(refusal, /staying open/)
+    assert.equal(dialogSignal.aborted, true)
+    assert.deepEqual(launcherCalls, [])
+    assert.deepEqual(exitRequests, [])
+    assert.equal(context.shutdowns, 0)
+  }
+})
+
+test("when an approved checkout is abandoned, its ticket is cancelled without falling back to exit", async (t) => {
+  // Arrange
+  const directory = makeCheckout(t)
+  for (const interruption of ["input", "session_switch", "abort", "agent_end", "session_shutdown", "failed_reply", "queued_input"]) {
+    const handlers = loadHandlers(exitCommandExtension, aiExitExtension)
+    const { tools, events, session_stop, exitRequests } = handlers
+    const context = createContext()
+    const cancellation = new AbortController()
+    const launcherCalls = recordLauncher(events)
+
+    // Act
+    const preparation = await requestCheckout(tools, context, directory, cancellation.signal)
+    if (interruption === "input") {
+      await handlers.input({
+        source: "interactive",
+        text: "Summarize the cancellation, then exit.",
+      }, context)
+    } else if (interruption === "session_switch") {
+      await handlers.session_switch({}, createContext("other-session"))
+    } else if (interruption === "abort") {
+      cancellation.abort()
+    } else if (interruption === "failed_reply") {
+      await session_stop(finalReply("test-session", "error"), context)
+    } else if (interruption === "queued_input") {
+      context.hasPendingMessages = () => true
+    } else {
+      await handlers[interruption]({}, context)
+    }
+    await session_stop(finalReply("test-session"), context)
+
+    // Assert
+    assert.match(preparation, /prepared/)
+    assert.deepEqual(launcherCalls, [
+      ["prepare", {
+        sessionId: "test-session",
+        directory,
+      }],
+      ["cancel", {
+        sessionId: "test-session",
+        ticket: "ticket-a",
+      }],
+    ], interruption)
+    assert.match(context.notices[0], /Checkout switch refused/)
+    assert.deepEqual(exitRequests, [])
+    assert.equal(context.shutdowns, 0)
+  }
+})
+
+test("when the launcher refuses to commit, the error is shown safely and the ticket is cancelled without falling back to exit", async (t) => {
+  // Arrange
+  const directory = makeCheckout(t)
+  for (const [message, displayed] of [
+    ["The approved directory changed after preparation.", /approved directory changed/],
+    ["\u001B[31munsafe launcher output\u001B[0m", /launcher did not commit/],
+  ]) {
+    const { tools, events, session_stop, exitRequests } = loadHandlers(aiExitExtension)
+    const context = createContext()
+    const launcherCalls = recordLauncher(events, (envelope) => {
+      envelope.result = {
+        status: "refused",
+        message,
+      }
+    })
+
+    // Act
+    await requestCheckout(tools, context, directory)
+    await session_stop(finalReply("test-session"), context)
+    const retry = await executeExitTool(tools.exit_after_response, {
+      reason: "Try a plain exit.",
+    }, context)
+    await session_stop(finalReply("test-session"), context)
+
+    // Assert
+    assert.deepEqual(launcherCalls.slice(1), [
+      ["commit", {
+        sessionId: "test-session",
+        ticket: "ticket-a",
+      }],
+      ["cancel", {
+        sessionId: "test-session",
+        ticket: "ticket-a",
+      }],
+    ])
+    assert.match(context.notices[0], displayed)
+    assert.doesNotMatch(context.notices[0], /unsafe launcher output/)
+    assert.match(retry, /staying open/)
+    assert.deepEqual(exitRequests, [])
+    assert.equal(context.shutdowns, 0)
+  }
+})
+
 test("when a follow-up suggestion contains shell syntax, it remains literal output after teardown", () => {
   // Arrange
   const suggestion = "printf '%s\\n' '$(touch not-run); text'\n# A second copyable line"
@@ -488,6 +814,84 @@ function runSuggestionExit(options) {
   })
 }
 
+function makeCheckout(t, name = "checkout") {
+  const root = mkdtempSync(join(realpathSync(tmpdir()), "omp-checkout-test-"))
+  t.after(() => rmSync(root, {
+    recursive: true,
+    force: true,
+  }))
+  const directory = join(root, name)
+  mkdirSync(directory)
+  return directory
+}
+
+function heldApproval() {
+  let approve
+  const promise = new Promise((resolve) => {
+    approve = () => resolve(true)
+  })
+  return {
+    promise,
+    approve,
+  }
+}
+
+function finalReply(sessionId, stopReason = "stop") {
+  return {
+    session_id: sessionId,
+    last_assistant_message: {
+      stopReason,
+      content: [
+        {
+          type: "text",
+          text: "Wrapped up.",
+        },
+      ],
+    },
+  }
+}
+
+async function requestCheckout(tools, context, directory, signal) {
+  const result = await tools.exit_with_follow_up.execute("switch-tool-call", {
+    kind: "checkout_switch",
+    directory,
+  }, signal, undefined, context)
+  return result.content[0].text
+}
+
+function recordLauncher(events, commit = (envelope) => {
+  envelope.result = {
+    status: "committed",
+  }
+}) {
+  const calls = []
+  const prefix = "omp-instance-control:fresh-launch:"
+  events.on(`${prefix}prepare`, (envelope) => {
+    calls.push(["prepare", {
+      ...envelope,
+    }])
+    envelope.result = {
+      status: "accepted",
+      ticket: "ticket-a",
+    }
+  })
+  events.on(`${prefix}commit`, (envelope) => {
+    calls.push(["commit", {
+      ...envelope,
+    }])
+    commit(envelope)
+  })
+  events.on(`${prefix}cancel`, (envelope) => {
+    calls.push(["cancel", {
+      ...envelope,
+    }])
+    envelope.result = {
+      status: "cancelled",
+    }
+  })
+  return calls
+}
+
 function loadHandlers(...extensions) {
   const eventHandlers = {}
   const exitRequests = []
@@ -521,6 +925,7 @@ function loadHandlers(...extensions) {
     },
   }
 
+  pi.events.hasListeners = (event) => pi.events.listenerCount(event) > 0
   pi.events.on("omp-exit-command:exit-requested", ({ sessionId }) => exitRequests.push(sessionId))
 
   for (const extension of extensions.length ? extensions : [exitCommandExtension]) {
@@ -543,14 +948,26 @@ function loadHandlers(...extensions) {
 
   return {
     ...handlers,
+    events: pi.events,
     tools,
     exitRequests,
   }
 }
 
 function createContext(sessionId = "test-session") {
+  const notices = []
   return {
     mode: "tui",
+    hasUI: true,
+    notices,
+    ui: {
+      async confirm() {
+        return true
+      },
+      notify(message) {
+        notices.push(message)
+      },
+    },
     agent: {
       kind: "main",
     },
