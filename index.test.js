@@ -303,7 +303,7 @@ test("when a checkout switch is refused or wrap-up is blocked, only a fresh stan
   }
 })
 
-test("a checkout switch shows the canonical path literally and commits only after its final reply", async (t) => {
+test("when a checkout switch is approved, the canonical path is shown literally and the launcher commits only after the final reply", async (t) => {
   // Arrange
   const { input, session_stop, tools, events, exitRequests } = loadHandlers(exitCommandExtension, aiExitExtension)
   const context = createContext("session-a")
@@ -374,7 +374,7 @@ test("a checkout switch shows the canonical path literally and commits only afte
   assert.equal(context.shutdowns, 0, "the launcher alone requests shutdown")
 })
 
-test("anything other than explicit approval refuses checkout and blocks same-turn exit", async (t) => {
+test("when checkout approval is not explicit, the switch is refused and same-turn exit is blocked", async (t) => {
   // Arrange
   const directory = makeCheckout(t)
   for (const answer of [false, undefined, "Yes", new Error("dialog failed")]) {
@@ -404,7 +404,7 @@ test("anything other than explicit approval refuses checkout and blocks same-tur
   }
 })
 
-test("unresolved, unsafe, or non-main destinations never prompt or contact the launcher", async (t) => {
+test("when the checkout path is unresolved or unsafe or the session is not the main terminal, neither the dialog nor the launcher runs", async (t) => {
   // Arrange
   const directory = makeCheckout(t)
   const parent = join(directory, "..")
@@ -443,7 +443,7 @@ test("unresolved, unsafe, or non-main destinations never prompt or contact the l
   }
 })
 
-test("a return-only launcher response is unsupported and does not arm any exit", async (t) => {
+test("when the launcher returns a value without mutating the envelope, the switch is unsupported and no exit is armed", async (t) => {
   // Arrange
   const { tools, session_stop, events, exitRequests } = loadHandlers(aiExitExtension)
   const context = createContext()
@@ -464,7 +464,7 @@ test("a return-only launcher response is unsupported and does not arm any exit",
   assert.equal(context.shutdowns, 0)
 })
 
-test("a refusing launcher keeps the session open and reports its preparation error", async (t) => {
+test("when the launcher refuses preparation, the session stays open and shows the error", async (t) => {
   // Arrange
   const { tools, session_stop, events, exitRequests } = loadHandlers(aiExitExtension)
   const context = createContext()
@@ -491,7 +491,7 @@ test("a refusing launcher keeps the session open and reports its preparation err
   assert.equal(context.shutdowns, 0)
 })
 
-test("an affirmative answer after user input, a session switch, or cancellation grants no ticket", async (t) => {
+test("when approval arrives after user input or another interruption, no ticket is prepared", async (t) => {
   // Arrange
   const directory = makeCheckout(t)
   for (const interruption of ["input", "session_switch", "abort", "replace_directory"]) {
@@ -535,7 +535,7 @@ test("an affirmative answer after user input, a session switch, or cancellation 
   }
 })
 
-test("abandoning an approved checkout cancels its ticket and cannot fall back to exit", async (t) => {
+test("when an approved checkout is abandoned, its ticket is cancelled without falling back to exit", async (t) => {
   // Arrange
   const directory = makeCheckout(t)
   for (const interruption of ["input", "session_switch", "abort", "agent_end", "session_shutdown", "failed_reply", "queued_input"]) {
@@ -583,7 +583,7 @@ test("abandoning an approved checkout cancels its ticket and cannot fall back to
   }
 })
 
-test("commit refusal is displayed safely, cancels the ticket, and cannot fall back to exit", async (t) => {
+test("when the launcher refuses to commit, the error is shown safely and the ticket is cancelled without falling back to exit", async (t) => {
   // Arrange
   const directory = makeCheckout(t)
   for (const [message, displayed] of [
