@@ -45,6 +45,12 @@ Before handing an immediate exit to native `/exit`, or calling `ctx.shutdown()` 
 
 `ompi` must implement this event contract to give explicit exit precedence. The [0.9.2 consumer](https://github.com/klondikemarlen/omp-instance-control/blob/475e70b4d62f79e5af997687536a00129d9b78cf/omp/index.js#L55-L82) records matching exit intent and [suppresses the restart handoff](https://github.com/klondikemarlen/omp-instance-control/blob/475e70b4d62f79e5af997687536a00129d9b78cf/omp/index.js#L299-L307). Without that consumer, the plugin still performs native shutdown, but an older wrapper may satisfy an accepted restart by reopening the session.
 
+### Approved checkout switch
+
+The exit plugin owns destination resolution and explicit human approval. The managed launcher owns validation, shutdown, and replacement of the process in its terminal. After approval, the plugin emits `omp-instance-control:fresh-launch:prepare` with the active session ID and resolved directory. The [managed adapter](https://github.com/klondikemarlen/omp-instance-control/blob/b08cb2e68a4269d80021659e170fb26a63582a67/omp/fresh-launch.js) responds synchronously on the same object. A missing or refused result is not an exit request.
+
+Keep the accepted ticket for that session only. Abandonment cancels the reservation; a matching `session_stop` commits it after the final reply. On this path do **not** send the plain exit event or call `ctx.shutdown()` separately: the launcher revalidates the directory, requests shutdown itself, and can replace a queued restart with exactly one fresh launch. The plugin does not infer process termination from tool completion.
+
 ### Wrapped resume hints
 
 OMP 18.12.6 hard-codes the native resume command and exposes no public override. At main-TUI `session_shutdown`, the base extension verifies `OMP_INSTANCE_CONTROL_LAUNCH_DIR` and `OMP_INSTANCE_CONTROL_LAUNCH_TOKEN` against the wrapper's version-1 `launch.json`, including its direct-parent PID. Inherited variables in nested OMP processes, peer-control-only installations, missing records, and mismatched tokens do not qualify.
